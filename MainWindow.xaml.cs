@@ -149,35 +149,6 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Lỗi khởi tạo WebView2: " + ex.Message);
             }
         }
-
-        // ==========================================================
-        // --- SỰ KIỆN ĐỔI GAME KHI BÁC SĨ CHỌN COMBOBOX ---
-        // ==========================================================
-        private void cboGameType_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (webViewGame == null || webViewGame.CoreWebView2 == null) return;
-
-            string gameFileName = "game_dynamic.html"; // Mặc định
-
-            if (cboGameType.SelectedIndex == 0)
-            {
-                gameFileName = "game_dynamic.html";
-            }
-            else if (cboGameType.SelectedIndex == 1)
-            {
-                gameFileName = "game_isometric.html";
-            }
-
-            string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Game", gameFileName);
-            if (File.Exists(fullPath))
-            {
-                webViewGame.CoreWebView2.Navigate(fullPath);
-            }
-            else
-            {
-                webViewGame.CoreWebView2.NavigateToString($"<html><body><h2>Không tìm thấy file {gameFileName}!</h2><p>Vui lòng kiểm tra lại thư mục 'Game'.</p></body></html>");
-            }
-        }
         private void CalculateReps(double angle)
         {
             if (_peak == double.MinValue && _valley == double.MaxValue)
@@ -262,7 +233,7 @@ namespace AngleMonitorWPF
                 webViewGame.Visibility = Visibility.Visible;
 
                 // Hiện combobox chọn game nếu đang ở chế độ Trò chơi
-                if (cboGameType != null) cboGameType.Visibility = Visibility.Visible;
+                if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
             }
         }
         // ==========================================================
