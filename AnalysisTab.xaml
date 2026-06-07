@@ -1,0 +1,419 @@
+﻿<Window x:Class="AngleMonitorWPF.AnalysisTab"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf" 
+        Title="RehabTrack – Session Dashboard" Height="750" Width="1150"
+        Background="#F4F7F9" FontFamily="Segoe UI"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <Style x:Key="SidebarBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                            CornerRadius="8" Padding="12,9">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#E8F5F2"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#D0EDE7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="24,20"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#000000" Opacity="0.055"
+                                  BlurRadius="14" ShadowDepth="2"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernScrollBarThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="bdr" CornerRadius="4" Background="#CBD5E0" Margin="2"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bdr" Property="Background" Value="#A0AABF"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="bdr" Property="Background" Value="#1DB899"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Border Background="{TemplateBinding Background}">
+                            <Track x:Name="PART_Track" IsDirectionReversed="true">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+                                </Track.DecreaseRepeatButton>
+
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ModernScrollBarThumb}"/>
+                                </Track.Thumb>
+
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="205"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="White">
+            <Border.Effect>
+                <DropShadowEffect Color="#000000" Opacity="0.07"
+                                  BlurRadius="12" ShadowDepth="1" Direction="0"/>
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Padding="18,16,18,14"
+                        BorderBrush="#F0F0F0" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="34" Height="34" CornerRadius="9" Background="#1DB899">
+                            <TextBlock Text="⚡" FontSize="17"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="White"/>
+                        </Border>
+                        <TextBlock Text="RehabTrack" FontSize="15" FontWeight="Bold"
+                                   Foreground="#1A1A2E" VerticalAlignment="Center"
+                                   Margin="10,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12,18,12,12">
+                        <TextBlock Text="SESSION HISTORY" FontSize="9.5"
+                                   FontWeight="SemiBold" Foreground="#9BA3AF"
+                                   Margin="10,0,0,10"/>
+
+                        <ItemsControl x:Name="SessionList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource SidebarBtnStyle}"
+                                            Click="SessionItem_Click"
+                                            Tag="{Binding}"
+                                            HorizontalAlignment="Stretch"
+                                            Margin="0,1">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="📅" FontSize="16" Foreground="#44B9A7" 
+                                                       VerticalAlignment="Center" Margin="0,0,10,0" Opacity="0.7"/>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Date}"
+                                                           FontSize="9.5" Foreground="#9BA3AF"/>
+                                                <TextBlock Text="{Binding Label}"
+                                                           FontSize="13" Foreground="#1A1A2E" FontWeight="SemiBold"
+                                                           Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Background="White" Padding="28,13"
+                    BorderBrush="#EAEAEA" BorderThickness="0,0,0,1">
+                <Grid>
+                    <TextBlock Text="Expanded Analytics Session Dashboard"
+                               FontSize="16" FontWeight="Bold"
+                               Foreground="#1A1A2E" VerticalAlignment="Center"/>
+
+                </Grid>
+            </Border>
+            <Border Grid.Row="0" Background="White" Padding="28,13"
+                    BorderBrush="#EAEAEA" BorderThickness="0,0,0,1">
+                <Grid>
+                    <TextBlock Text="Expanded Analytics Session Dashboard"
+                               FontSize="16" FontWeight="Bold"
+                               Foreground="#1A1A2E" VerticalAlignment="Center"/>
+
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
+
+                        <TextBlock Text="Compare Previous" FontSize="12"
+                                   Foreground="#9BA3AF" VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+                        <ToggleButton Width="40" Height="22">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="track" CornerRadius="11"
+                                            Width="40" Height="22" Background="#D1D5DB">
+                                        <Border x:Name="thumb" Width="16" Height="16"
+                                                CornerRadius="8" Background="White"
+                                                HorizontalAlignment="Left" Margin="3,0,0,0">
+                                            <Border.Effect>
+                                                <DropShadowEffect Opacity="0.18"
+                                                                  BlurRadius="4" ShadowDepth="1"/>
+                                            </Border.Effect>
+                                        </Border>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="track" Property="Background" Value="#1DB899"/>
+                                            <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right"/>
+                                            <Setter TargetName="thumb" Property="Margin" Value="0,0,3,0"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <Button Click="ExportPDF_Click" Margin="16,0,0,0" Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="btn" Background="#1DB899"
+                                            CornerRadius="8" Padding="14,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📄" FontSize="12"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,6,0"/>
+                                            <TextBlock Text="Export PDF Report"
+                                                       FontSize="12" Foreground="White"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="btn" Property="Background" Value="#17A589"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="btn" Property="Background" Value="#13947A"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,24,28,28">
+
+                    <Grid Margin="0,0,0,22">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,10,0">
+                            <StackPanel>
+                                <TextBlock Text="PEAK ROM" FontSize="10" FontWeight="SemiBold" Foreground="#9BA3AF"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,6">
+                                    <TextBlock x:Name="PeakRomValue" Text="106.6" FontSize="34" FontWeight="Bold" Foreground="#1A1A2E"/>
+                                    <TextBlock Text="°" FontSize="18" Foreground="#9BA3AF" VerticalAlignment="Top" Margin="2,7,0,0"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" Fill="#1DB899" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBlock Text="Hoàn thành" FontSize="10" Foreground="#1DB899" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" CornerRadius="12" Margin="0,0,10,0" Background="#38B2AC" Padding="24,20">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#38B2AC" Opacity="0.32" BlurRadius="20" ShadowDepth="5"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="AVG ROM" FontSize="10" FontWeight="SemiBold" Foreground="#E6FFFA"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,6">
+                                    <TextBlock x:Name="AvgRomValue" Text="-9.8" FontSize="34" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="°" FontSize="18" Foreground="#E6FFFA" VerticalAlignment="Top" Margin="2,7,0,0"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" Fill="White" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBlock Text="TARGET: 115°" FontSize="10" Foreground="White" FontWeight="SemiBold" Opacity="0.88"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0,0,10,0">
+                            <StackPanel>
+                                <TextBlock Text="REPS" FontSize="10" FontWeight="SemiBold" Foreground="#9BA3AF"/>
+                                <TextBlock x:Name="RepsValue" Text="5" FontSize="34" FontWeight="Bold" Foreground="#1A1A2E" Margin="0,8,0,6"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" Fill="#CBD5E0" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBlock Text="FULL EXTENSION" FontSize="10" Foreground="#9BA3AF" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="3" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="DURATION" FontSize="10" FontWeight="SemiBold" Foreground="#9BA3AF"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,6">
+                                    <TextBlock x:Name="DurationValue" Text="0" FontSize="34" FontWeight="Bold" Foreground="#1A1A2E"/>
+                                    <TextBlock Text=" min" FontSize="15" Foreground="#9BA3AF" VerticalAlignment="Bottom" Margin="0,0,0,5"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" Fill="#CBD5E0" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBlock Text="ACTIVE SESSION" FontSize="10" Foreground="#9BA3AF" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.4*"/>
+                            <ColumnDefinition Width="1*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Background="White" CornerRadius="12" Padding="24,20,24,10" Margin="0,0,12,0">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" Opacity="0.055" BlurRadius="14" ShadowDepth="2"/>
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="310"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0" Margin="0,0,0,20">
+                                    <TextBlock Text="Angle Trace (Angle vs. Time)"
+                       FontSize="15" FontWeight="SemiBold"
+                       Foreground="#1A1A2E" VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <lvc:CartesianChart x:Name="MyChart" Grid.Row="1" Margin="0,0,0,25"
+                            Padding="10,10,15,10"
+                            Zoom="X" Pan="X" DisableAnimations="False" Hoverable="True">
+                                    <lvc:CartesianChart.Series>
+                                        <lvc:LineSeries Values="{Binding AngleValues}" 
+                                Title="Góc (°)" Stroke="#38B2AC" StrokeThickness="3" 
+                                PointGeometry="{x:Null}" LineSmoothness="0.8">
+                                            <lvc:LineSeries.Fill>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                    <GradientStop Color="#4D38B2AC" Offset="0"/>
+                                                    <GradientStop Color="#0038B2AC" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </lvc:LineSeries.Fill>
+                                        </lvc:LineSeries>
+                                    </lvc:CartesianChart.Series>
+
+                                    <lvc:CartesianChart.AxisX>
+                                        <lvc:Axis Title="" MinValue="0" LabelFormatter="{Binding TimeFormatter}" Foreground="#8A94A6" FontSize="12">
+                                            <lvc:Axis.Separator>
+                                                <lvc:Separator StrokeThickness="0"/>
+                                            </lvc:Axis.Separator>
+                                        </lvc:Axis>
+                                    </lvc:CartesianChart.AxisX>
+
+                                    <lvc:CartesianChart.AxisY>
+                                        <lvc:Axis Title="" MinValue="0" Foreground="#8A94A6" FontSize="11">
+                                            <lvc:Axis.Separator>
+                                                <lvc:Separator Stroke="#F3F4F6" StrokeThickness="1" StrokeDashArray="4"/>
+                                            </lvc:Axis.Separator>
+                                        </lvc:Axis>
+                                    </lvc:CartesianChart.AxisY>
+                                </lvc:CartesianChart>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1" Background="White" CornerRadius="12" Padding="24,20,24,10" Margin="12,0,0,0">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" Opacity="0.055" BlurRadius="14" ShadowDepth="2"/>
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="310"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="Phân phối Reps theo Góc"
+                   FontSize="15" FontWeight="SemiBold" Foreground="#1A1A2E"
+                   VerticalAlignment="Center" Margin="0,0,0,20"/>
+
+                                <lvc:CartesianChart Name="MyBarChart" Grid.Row="1" Margin="0,0,0,25" DisableAnimations="False" Hoverable="True">
+                                    <lvc:CartesianChart.Series>
+                                        <lvc:ColumnSeries Values="{Binding RepDistributionValues}" 
+                              Title="Số Reps" Fill="#38B2AC" MaxColumnWidth="55"
+                              DataLabels="True"
+                              FontSize="16"
+                              FontWeight="Bold"
+                              Foreground="#4A5568">
+                                        </lvc:ColumnSeries>
+                                    </lvc:CartesianChart.Series>
+
+                                    <lvc:CartesianChart.AxisX>
+                                        <lvc:Axis Labels="{Binding HistogramLabels}" Foreground="#8A94A6" FontSize="12">
+                                            <lvc:Axis.Separator>
+                                                <lvc:Separator StrokeThickness="0" Step="1"/>
+                                            </lvc:Axis.Separator>
+                                        </lvc:Axis>
+                                    </lvc:CartesianChart.AxisX>
+
+                                    <lvc:CartesianChart.AxisY>
+                                        <lvc:Axis MinValue="0" ShowLabels="False">
+                                            <lvc:Axis.Separator>
+                                                <lvc:Separator StrokeThickness="0"/>
+                                            </lvc:Axis.Separator>
+                                        </lvc:Axis>
+                                    </lvc:CartesianChart.AxisY>
+                                </lvc:CartesianChart>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <wv2:WebView2 x:Name="PdfWebView" Visibility="Collapsed" />
+    </Grid>
+</Window>

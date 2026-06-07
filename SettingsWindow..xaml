@@ -1,0 +1,58 @@
+﻿<Window x:Class="AngleMonitorWPF.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cài đặt hệ thống" Height="380" Width="350"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize" Background="#F3F4F6">
+
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="White" CornerRadius="12" Margin="15" Padding="20">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.05" Color="Black"/>
+        </Border.Effect>
+        <StackPanel>
+            <TextBlock Text="CẤU HÌNH THIẾT BỊ" FontSize="16" FontWeight="Bold" Foreground="#1F2937" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+
+            <TextBlock Text="Hiệu đỉnh - đáy (Biên độ 1 rep) (°):" Foreground="#4B5563" FontWeight="SemiBold" Margin="0,0,0,5"/>
+            <TextBox x:Name="txtMinDelta" Margin="0,0,0,2"/>
+            <TextBlock Text="* Bệnh nhân cứng khớp nên hạ xuống 15-20°" FontStyle="Italic" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Ngưỡng nhiễu (Bỏ qua rung lắc) (°):" Foreground="#4B5563" FontWeight="SemiBold" Margin="0,0,0,5"/>
+            <TextBox x:Name="txtNoiseMargin" Margin="0,0,0,15"/>
+
+            <TextBlock Text="Mức tạ (kg):" Foreground="#4B5563" FontWeight="SemiBold" Margin="0,0,0,5"/>
+            <TextBox x:Name="txtWeight" Margin="0,0,0,15"/>
+
+            <Separator Margin="0,5,0,15" Background="#E5E7EB"/>
+
+            <Button x:Name="btnSave" Content="LƯU CÀI ĐẶT" Height="40" Background="#10B981" Foreground="White" FontWeight="Bold" FontSize="14" BorderThickness="0" Cursor="Hand" Click="btnSave_Click">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="6"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+        </StackPanel>
+    </Border>
+</Window>

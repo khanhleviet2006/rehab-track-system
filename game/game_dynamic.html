@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Phi Thuyền Không Gian – Dynamic ROM</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+
+		<!-- ═══════════════════════════════════════════
+       GAME CANVAS
+  ══════════════════════════════════════════════ -->
+		<canvas id="gameCanvas"></canvas>
+
+		<!-- ═══════════════════════════════════════════
+       MÀNG HÌNH TỔNG KẾT (Overlay – mặc định ẩn)
+  ══════════════════════════════════════════════ -->
+		<div id="summaryOverlay" class="hidden">
+
+			<div class="summary-card">
+
+				<!-- Header -->
+				<div class="summary-header">
+					<div class="header-icon">
+						<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="20" cy="20" r="18" stroke="#00b074" stroke-width="2"/>
+							<path d="M12 20h4l3-7 4 14 3-10 3 3h4" stroke="#00b074" stroke-width="2"
+								  stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+					</div>
+					<div>
+						<h1 class="summary-title">Kết Quả Phục Hồi</h1>
+						<p class="summary-subtitle">Dynamic ROM – RehabTrack System</p>
+					</div>
+					<div class="session-badge">PHIÊN HOÀN TẤT</div>
+				</div>
+
+				<!-- Divider -->
+				<div class="divider"></div>
+
+				<!-- Stats Grid -->
+				<div class="stats-grid">
+
+					<div class="stat-card accent">
+						<div class="stat-icon">🏆</div>
+						<div class="stat-label">Điểm Số</div>
+						<div class="stat-value" id="res-score">0</div>
+						<div class="stat-unit">pts</div>
+					</div>
+
+					<div class="stat-card">
+						<div class="stat-icon">🔄</div>
+						<div class="stat-label">Số Lần Lặp</div>
+						<div class="stat-value" id="res-reps">0</div>
+						<div class="stat-unit">reps</div>
+					</div>
+
+					<div class="stat-card">
+						<div class="stat-icon">📈</div>
+						<div class="stat-label">Peak ROM</div>
+						<div class="stat-value" id="res-peak">0°</div>
+						<div class="stat-unit">góc tối đa</div>
+					</div>
+
+					<div class="stat-card">
+						<div class="stat-icon">📊</div>
+						<div class="stat-label">ROM Trung Bình</div>
+						<div class="stat-value" id="res-avg">0°</div>
+						<div class="stat-unit">trung bình</div>
+					</div>
+
+					<div class="stat-card">
+						<div class="stat-icon">⏱️</div>
+						<div class="stat-label">Thời Gian</div>
+						<div class="stat-value" id="res-time">0s</div>
+						<div class="stat-unit">phiên</div>
+					</div>
+
+					<div class="stat-card">
+						<div class="stat-icon">⭐</div>
+						<div class="stat-label">Đánh Giá</div>
+						<div class="stat-value" id="res-grade">–</div>
+						<div class="stat-unit">mức độ</div>
+					</div>
+
+				</div>
+
+				<!-- ROM Progress Bar -->
+				<div class="rom-progress-section">
+					<div class="rom-label">
+						<span>Tiến Độ ROM</span>
+						<span id="res-rom-pct">0%</span>
+					</div>
+					<div class="rom-bar-track">
+						<div class="rom-bar-fill" id="res-rom-bar"></div>
+						<div class="rom-bar-target" id="res-rom-target"></div>
+					</div>
+					<div class="rom-bar-marks">
+						<span>0°</span>
+						<span>70°</span>
+						<span>140°</span>
+					</div>
+				</div>
+
+				<!-- Divider -->
+				<div class="divider"></div>
+
+				<!-- Actions -->
+				<div class="action-row">
+					<button onclick="restartGame()">Chơi Lại</button>
+						↺ Chơi Lại
+					<button class="btn-primary" id="exportBtn" onclick="exportData()">
+						<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+							<path d="M10 2v10m0 0l-3-3m3 3l3-3M4 14v2a2 2 0 002 2h8a2 2 0 002-2v-2"
+								  stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+						Xuất Dữ Liệu Bệnh Án
+					</button>
+				</div>
+
+				<!-- Export feedback -->
+				<div id="exportFeedback" class="export-feedback hidden">
+					✓ Dữ liệu đã được gửi thành công về hệ thống
+				</div>
+
+			</div>
+		</div>
+
+		<!-- ═══════════════════════════════════════════
+       LOADING SCREEN
+  ══════════════════════════════════════════════ -->
+		<div id="loadingScreen">
+			<div class="loading-content">
+				<div class="loading-ship">🚀</div>
+				<h2>Dynamic ROM</h2>
+				<p>Đang khởi tạo hệ thống theo dõi...</p>
+				<div class="loading-bar">
+					<div class="loading-fill"></div>
+				</div>
+			</div>
+		</div>
+
+		<script src="game_dynamic.js"></script>
+	</body>
+</html>

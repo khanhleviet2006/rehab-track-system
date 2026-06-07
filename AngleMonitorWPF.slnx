@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="game.js" />
+    <File Path="index.html" />
+    <File Path="style.css" />
+  </Folder>
+  <Project Path="AngleMonitorWPF.csproj" Id="c36cdd41-4d1b-4ad2-848c-01c5bc9ad24f" />
+</Solution>

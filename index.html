@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phi Thuyền Không Gian - Dynamic ROM</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="end-screen" class="hidden">
+            <h2>HOÀN THÀNH BÀI TẬP</h2>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="stat-label">Điểm số</span>
+                    <span class="stat-value" id="final-score">0</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Số lần lặp (REPS)</span>
+                    <span class="stat-value" id="final-reps">0</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Peak ROM</span>
+                    <span class="stat-value" id="final-peak-rom">0°</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">ROM Trung bình</span>
+                    <span class="stat-value" id="final-avg-rom">0°</span>
+                </div>
+            </div>
+            <button id="btn-export">Xuất Dữ Liệu Bệnh Án</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

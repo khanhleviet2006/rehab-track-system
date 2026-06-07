@@ -1,0 +1,598 @@
+﻿using LiveCharts;
+using LiveCharts.Defaults;
+using Microsoft.Web.WebView2.Core;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.SqlClient;
+using System.IO;
+using System.IO.Ports;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+
+namespace AngleMonitorWPF
+{
+    public partial class MainWindow : Window, INotifyPropertyChanged
+    {
+        private double _lastSentAngleToGame = -999.0;
+
+        private double _axisMax;
+        private double _axisMin;
+
+        public double AxisMax
+        {
+            get { return _axisMax; }
+            set { _axisMax = value; OnPropertyChanged("AxisMax"); }
+        }
+        public double AxisMin
+        {
+            get { return _axisMin; }
+            set { _axisMin = value; OnPropertyChanged("AxisMin"); }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        // --- BIẾN TỐI ƯU LUỒNG DỮ LIỆU ---
+        private bool isGamePaused = true;
+        private ConcurrentQueue<(double Angle, double Accel, double Time)> _dataQueue = new ConcurrentQueue<(double, double, double)>();
+        private int _sampleCounter = 0;
+        private readonly int DOWN_SAMPLE_FACTOR = 3;
+        private DispatcherTimer _uiUpdateTimer;
+
+        private DispatcherTimer _stopwatchTimer;
+        private TimeSpan _elapsedTime;
+        private double _tempAngle = 0;
+        private bool _hasAngle = false;
+        private SerialPort _serialPort;
+        private bool _isConnected = false;
+        private RehabSession _currentSession;
+
+        // =============================================
+        // --- THUẬT TOÁN PEAK-TO-VALLEY STATE ---
+        // =============================================
+        private double _peak = double.MinValue;
+        private double _valley = double.MaxValue;
+        private bool _lookingForValley = false;
+
+        // --- REPS & HISTOGRAM ---
+        private int _repCount = 0;
+        private List<double> _sessionMaxAngles = new List<double>();
+        private double _sessionMaxSpeed = 0;
+
+        // --- GIẢ LẬP & THỜI GIAN ---
+        private DispatcherTimer _simTimer;
+        private double _simTimeCounter = 0;
+        private Random _rnd = new Random();
+        private DateTime _startTime = DateTime.MinValue;
+
+        // --- LIVECHARTS BINDING ---
+        public ChartValues<ObservablePoint> AngleValues { get; set; }
+        public ChartValues<ObservablePoint> UpperThresholdValues { get; set; }
+        public ChartValues<ObservablePoint> LowerThresholdValues { get; set; }
+        public ChartValues<ObservablePoint> ForceValues { get; set; }
+        public ChartValues<int> HistogramValues { get; set; }
+        public string[] HistogramLabels { get; set; }
+        public Func<double, string> TimeFormatter { get; set; }
+
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            AngleValues = new ChartValues<ObservablePoint>();
+            UpperThresholdValues = new ChartValues<ObservablePoint>();
+            LowerThresholdValues = new ChartValues<ObservablePoint>();
+            ForceValues = new ChartValues<ObservablePoint>();
+            TimeFormatter = value => value.ToString("0") + "s";
+
+            HistogramValues = new ChartValues<int> { 0, 0, 0, 0, 0, 0 };
+            HistogramLabels = new[] { "0-30°", "30-60°", "60-90°", "90-120°", "120-150°", "150-180°" };
+
+            AxisMax = 10;
+            AxisMin = 0;
+
+            DataContext = this;
+
+            // KHỞI TẠO WEBVIEW2 (TRÒ CHƠI)
+            InitializeWebViewAsync();
+
+            _stopwatchTimer = new DispatcherTimer();
+            _stopwatchTimer.Interval = TimeSpan.FromSeconds(1);
+            _stopwatchTimer.Tick += (s, e) =>
+            {
+                _elapsedTime = _elapsedTime.Add(TimeSpan.FromSeconds(1));
+                txtSessionTime.Text = _elapsedTime.ToString(@"hh\:mm\:ss");
+            };
+
+            _uiUpdateTimer = new DispatcherTimer();
+            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(40);
+            _uiUpdateTimer.Tick += ProcessQueueToUI;
+            _uiUpdateTimer.Start();
+        }
+
+        // ==========================================================
+        // --- KHỞI TẠO VÀ XỬ LÝ SỰ KIỆN WEBVIEW2 (GAME) ---
+        // ==========================================================
+        private async void InitializeWebViewAsync()
+        {
+            try
+            {
+                await webViewGame.EnsureCoreWebView2Async(null);
+
+                // Mặc định load Game 1 (Dynamic ROM) khi vừa mở phần mềm
+                string defaultGamePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Game", "game_dynamic.html");
+                if (File.Exists(defaultGamePath))
+                {
+                    webViewGame.CoreWebView2.Navigate(defaultGamePath);
+                }
+                else
+                {
+                    webViewGame.CoreWebView2.NavigateToString("<html><body><h2>Không tìm thấy file Game!</h2><p>Vui lòng copy thư mục 'Game' vào thư mục Debug của phần mềm.</p></body></html>");
+                }
+
+                // Nhận tín hiệu kết thúc từ Game
+                webViewGame.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi khởi tạo WebView2: " + ex.Message);
+            }
+        }
+
+        // ==========================================================
+        // --- SỰ KIỆN ĐỔI GAME KHI BÁC SĨ CHỌN COMBOBOX ---
+        // ==========================================================
+        private void cboGameType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (webViewGame == null || webViewGame.CoreWebView2 == null) return;
+
+            string gameFileName = "game_dynamic.html"; // Mặc định
+
+            if (cboGameType.SelectedIndex == 0)
+            {
+                gameFileName = "game_dynamic.html";
+            }
+            else if (cboGameType.SelectedIndex == 1)
+            {
+                gameFileName = "game_isometric.html";
+            }
+
+            string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Game", gameFileName);
+            if (File.Exists(fullPath))
+            {
+                webViewGame.CoreWebView2.Navigate(fullPath);
+            }
+            else
+            {
+                webViewGame.CoreWebView2.NavigateToString($"<html><body><h2>Không tìm thấy file {gameFileName}!</h2><p>Vui lòng kiểm tra lại thư mục 'Game'.</p></body></html>");
+            }
+        }
+        private void CalculateReps(double angle)
+        {
+            if (_peak == double.MinValue && _valley == double.MaxValue)
+            {
+                _peak = angle;
+                _valley = angle;
+            }
+
+            // Lấy thông số cấu hình do bác sĩ thiết lập
+            double currentNoiseMargin = DeviceSettings.NoiseMargin;
+            double currentMinDelta = DeviceSettings.MinDeltaForRep;
+
+            if (!_lookingForValley)
+            {
+                if (angle > _peak)
+                {
+                    _peak = angle;
+                }
+                else if (_peak - angle >= currentNoiseMargin)
+                {
+                    _valley = angle;
+                    _lookingForValley = true;
+                }
+            }
+            else
+            {
+                if (angle < _valley)
+                {
+                    _valley = angle;
+                }
+                else if (angle - _valley >= currentNoiseMargin)
+                {
+                    double delta = _peak - _valley;
+
+                    // SO SÁNH VỚI NGƯỠNG ĐỘNG (currentMinDelta) THAY VÌ FIX CỨNG 40.0
+                    if (delta >= currentMinDelta)
+                    {
+                        _repCount++;
+
+                        // Vì CalculateReps không chạy trên Main Thread (sau khi ta đã tối ưu), 
+                        // cần dùng Dispatcher để cập nhật UI tránh lỗi văng app
+                        Dispatcher.Invoke(() =>
+                        {
+                            txtReps.Text = _repCount.ToString();
+                        });
+
+                        _sessionMaxAngles.Add(_peak);
+                        int index = Math.Max(0, Math.Min(5, (int)(_peak / 30.0)));
+                        HistogramValues[index]++;
+                    }
+
+                    _peak = angle;
+                    _valley = double.MaxValue;
+                    _lookingForValley = false;
+                }
+            }
+        }
+        private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            // Nhận chuỗi JSON kết quả từ game.js
+            string jsonResult = e.TryGetWebMessageAsString();
+
+            // Hiện hộp thoại hoặc xử lý lưu JSON này vào Database SQL của hệ thống
+            MessageBox.Show("Bài tập Game đã hoàn thành!\nDữ liệu nhận được: " + jsonResult, "Thông báo hệ thống", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void Mode_Changed(object sender, RoutedEventArgs e)
+        {
+            if (chartAngle == null || webViewGame == null) return;
+
+            if (rbClinicalMode.IsChecked == true)
+            {
+                chartAngle.Visibility = Visibility.Visible;
+                webViewGame.Visibility = Visibility.Collapsed;
+
+                // Ẩn combobox chọn game nếu đang ở chế độ Lâm sàng
+                if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
+            }
+            else if (rbGameMode.IsChecked == true)
+            {
+                chartAngle.Visibility = Visibility.Collapsed;
+                webViewGame.Visibility = Visibility.Visible;
+
+                // Hiện combobox chọn game nếu đang ở chế độ Trò chơi
+                if (cboGameType != null) cboGameType.Visibility = Visibility.Visible;
+            }
+        }
+        // ==========================================================
+
+        private async Task<string> AutoFindBluetoothPortAsync()
+        {
+            return await Task.Run(() =>
+            {
+                string[] danhSachCong = SerialPort.GetPortNames();
+                foreach (string port in danhSachCong)
+                {
+                    try
+                    {
+                        using (SerialPort testPort = new SerialPort(port, 115200))
+                        {
+                            testPort.ReadTimeout = 1500;
+                            testPort.Open();
+
+                            for (int i = 0; i < 3; i++)
+                            {
+                                string data = testPort.ReadLine();
+                                if (data.Contains("Angle:"))
+                                {
+                                    return port;
+                                }
+                            }
+                        }
+                    }
+                    catch { continue; }
+                }
+                return null;
+            });
+        }
+
+        private void btnOpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsWindow settings = new SettingsWindow();
+            settings.ShowDialog();
+        }
+
+        private async void btnStartStop_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!_isConnected)
+                {
+                    Mouse.OverrideCursor = Cursors.Wait;
+                    txtStatus.Text = "● Đang quét tìm thiết bị Bluetooth...";
+                    btnStartStop.IsEnabled = false; // Tạm khóa nút để tránh double-click
+
+                    // Chạy quét ở luồng nền, giao diện vẫn mượt mà
+                    string congTuDong = await AutoFindBluetoothPortAsync();
+
+                    Mouse.OverrideCursor = null;
+                    btnStartStop.IsEnabled = true;
+
+                    if (string.IsNullOrEmpty(congTuDong))
+                    {
+                        MessageBox.Show("Không tìm thấy mạch đo! Vui lòng kiểm tra lại:\n1. Mạch đã được bật nguồn chưa?\n2. Đã ghép đôi Bluetooth với máy tính chưa?", "Lỗi kết nối", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        txtStatus.Text = "● Chưa kết nối";
+                        return;
+                    }
+
+                    // ... (Giữ nguyên phần khởi tạo SerialPort và các biến khác của bạn ở đây) ...
+                    AngleValues.Clear();
+                    UpperThresholdValues.Clear();
+                    LowerThresholdValues.Clear();
+                    ForceValues.Clear();
+                    AxisMax = 10;
+                    AxisMin = 0;
+
+                    _startTime = DateTime.Now;
+                    _currentSession = new RehabSession();
+                    _currentSession.SessionId = DatabaseHelper.CreateNewSession();
+
+                    _serialPort = new SerialPort(congTuDong, 115200);
+                    _serialPort.DataReceived += SerialPort_DataReceived;
+                    _serialPort.Open();
+
+                    _isConnected = true;
+                    btnStartStop.Content = "⏹ Ngắt kết nối";
+                    btnStartStop.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EF4444"));
+                    txtStatus.Text = "● Đã kết nối tự động qua " + congTuDong;
+
+                    _elapsedTime = TimeSpan.Zero;
+                    txtSessionTime.Text = "00:00:00";
+                    _stopwatchTimer.Start();
+
+                    if (rbGameMode.IsChecked == true)
+                    {
+                        btnPauseResumeGame.Visibility = Visibility.Visible;
+                        if (webViewGame != null && webViewGame.CoreWebView2 != null)
+                        {
+                            // ĐỔI THÀNH window.startGame(); 
+                            await webViewGame.CoreWebView2.ExecuteScriptAsync("window.startGame();");
+                            isGamePaused = false;
+                            btnPauseResumeGame.Content = "⏸ Tạm dừng Game";
+                            btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+                        }
+                    }
+                }
+                else
+                {
+                    // ... (Giữ nguyên phần ngắt kết nối của bạn) ...
+                    if (_serialPort != null && _serialPort.IsOpen)
+                    {
+                        _serialPort.Close();
+                    }
+
+                    // THÊM ĐOẠN NÀY ĐỂ KHÓA GAME KHI NGẮT KẾT NỐI
+                    if (webViewGame != null && webViewGame.CoreWebView2 != null)
+                    {
+                        await webViewGame.CoreWebView2.ExecuteScriptAsync("window.stopGame();");
+                    }
+
+                    _isConnected = false;
+                    _stopwatchTimer.Stop();
+
+                    btnStartStop.Content = "▶ Bắt đầu tập";
+                    btnStartStop.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+                    txtStatus.Text = "● Đã ngắt kết nối";
+                    btnPauseResumeGame.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                Mouse.OverrideCursor = null;
+                btnStartStop.IsEnabled = true;
+                MessageBox.Show("Có lỗi xảy ra: " + ex.Message);
+            }
+        }
+
+        private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+            try
+            {
+                string data = _serialPort.ReadLine().Trim();
+
+                // Xử lý chuỗi siêu tốc độ bằng Substring thay vì Regex đắt đỏ
+                if (data.StartsWith("Angle:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string numberOnly = data.Substring(6).Trim();
+
+                    if (double.TryParse(numberOnly, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double angle))
+                    {
+                        if (_startTime == DateTime.MinValue) _startTime = DateTime.Now;
+                        double preciseTime = (DateTime.Now - _startTime).TotalSeconds;
+
+                        _dataQueue.Enqueue((angle, 0, preciseTime));
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // =========================================================================
+        // TỐI ƯU 4: TỐI ƯU RENDER BIỂU ĐỒ VÀ WEBVIEW2 TRONG BỘ ĐỊNH THỜI 40MS
+        // =========================================================================
+        private void ProcessQueueToUI(object sender, EventArgs e)
+        {
+            if (_dataQueue.IsEmpty) return;
+
+            var newAngles = new List<ObservablePoint>();
+            var newUppers = new List<ObservablePoint>();
+            var newLowers = new List<ObservablePoint>();
+            var newForces = new List<ObservablePoint>();
+
+            double latestAngle = 0;
+            bool hasData = false;
+
+            while (_dataQueue.TryDequeue(out var dataPoint))
+            {
+                hasData = true;
+                latestAngle = dataPoint.Angle;
+
+                CalculateReps(dataPoint.Angle);
+
+                _sampleCounter++;
+                if (_sampleCounter % DOWN_SAMPLE_FACTOR == 0)
+                {
+                    double targetThresh = DeviceSettings.TargetThreshold;
+                    double startRepThresh = DeviceSettings.MinAngleLimit + 10;
+                    double force = DeviceSettings.DumbbellWeight * Math.Abs(dataPoint.Accel) * 0.5;
+
+                    newAngles.Add(new ObservablePoint(dataPoint.Time, dataPoint.Angle));
+                    newUppers.Add(new ObservablePoint(dataPoint.Time, targetThresh));
+                    newLowers.Add(new ObservablePoint(dataPoint.Time, startRepThresh));
+                    newForces.Add(new ObservablePoint(dataPoint.Time, force));
+
+                    if (_currentSession != null)
+                    {
+                        _currentSession.ChartData.Add(new SessionDataPoint { Time = dataPoint.Time, Angle = dataPoint.Angle });
+                    }
+                }
+            }
+
+            if (hasData)
+            {
+                txtAngle.Text = latestAngle.ToString("F1");
+
+                if (newAngles.Count > 0)
+                {
+                    AngleValues.AddRange(newAngles);
+                    UpperThresholdValues.AddRange(newUppers);
+                    LowerThresholdValues.AddRange(newLowers);
+                    ForceValues.AddRange(newForces);
+
+                    // TỐI ƯU: Tính toán số lượng cần xóa để xóa 1 lần bằng vòng for thay vì while
+                    // Giảm tải cho LiveCharts NotifyCollectionChanged
+                    int overflowCount = AngleValues.Count - 500;
+                    if (overflowCount > 0)
+                    {
+                        for (int i = 0; i < overflowCount; i++)
+                        {
+                            AngleValues.RemoveAt(0);
+                            UpperThresholdValues.RemoveAt(0);
+                            LowerThresholdValues.RemoveAt(0);
+                            ForceValues.RemoveAt(0);
+                        }
+                    }
+                }
+
+                // TỐI ƯU: Chỉ gửi dữ liệu sang WebView2 Game nếu góc lệch > 0.5 độ so với lần cuối
+                // Giúp trình duyệt không bị nghẽn (Throttle)
+                if (webViewGame.Visibility == Visibility.Visible && webViewGame.CoreWebView2 != null)
+                {
+                    if (Math.Abs(latestAngle - _lastSentAngleToGame) > 0.5)
+                    {
+                        string angleString = latestAngle.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                        string script = $"if (typeof updateAngle === 'function') {{ updateAngle({angleString}); }}";
+                        webViewGame.CoreWebView2.ExecuteScriptAsync(script);
+
+                        _lastSentAngleToGame = latestAngle; // Cập nhật lại góc cuối
+                    }
+                }
+            }
+
+            if (_isConnected && _startTime != DateTime.MinValue)
+            {
+                double realTime = (DateTime.Now - _startTime).TotalSeconds;
+                if (realTime > 10)
+                {
+                    AxisMax = realTime;
+                    AxisMin = realTime - 10;
+                }
+            }
+        }
+        private async void btnPauseResumeGame_Click(object sender, RoutedEventArgs e)
+        {
+            if (webViewGame == null || webViewGame.CoreWebView2 == null) return;
+
+            if (!isGamePaused)
+            {
+                // Đang chạy -> Bấm để Tạm dừng
+                await webViewGame.CoreWebView2.ExecuteScriptAsync("pauseGame();");
+                btnPauseResumeGame.Content = "▶ Tiếp tục Game";
+                btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981")); // Đổi màu xanh lá
+                isGamePaused = true;
+            }
+            else
+            {
+                // Đang tạm dừng -> Bấm để Chạy tiếp
+                await webViewGame.CoreWebView2.ExecuteScriptAsync("startGame();");
+                btnPauseResumeGame.Content = "⏸ Tạm dừng Game";
+                btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B")); // Đổi màu cam
+                isGamePaused = false;
+            }
+        }
+
+        private void btnResetReps_Click(object sender, RoutedEventArgs e)
+        {
+            _repCount = 0;
+            txtReps.Text = "0";
+            for (int i = 0; i < HistogramValues.Count; i++) HistogramValues[i] = 0;
+            if (_sessionMaxAngles != null) _sessionMaxAngles.Clear();
+
+            _peak = double.MinValue;
+            _valley = double.MaxValue;
+            _lookingForValley = false;
+
+            _sessionMaxSpeed = 0;
+            _elapsedTime = TimeSpan.Zero;
+            txtSessionTime.Text = "00:00:00";
+        }
+
+        private void btnOpenAnalysis_Click(object sender, RoutedEventArgs e)
+        {
+            AnalysisTab tab = new AnalysisTab();
+            tab.ShowDialog();
+        }
+
+        private void LoadChartData(DateTime startDate, DateTime endDate)
+        {
+        }
+
+        private void btnBack_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isConnected)
+            {
+                if (_serialPort != null && _serialPort.IsOpen)
+                {
+                    _serialPort.Close();
+                }
+                _isConnected = false;
+                if (_stopwatchTimer != null) _stopwatchTimer.Stop();
+            }
+
+            if (_simTimer != null && _simTimer.IsEnabled)
+            {
+                _simTimer.Stop();
+            }
+
+            bool isFound = false;
+            foreach (Window window in Application.Current.Windows)
+            {
+                if (window is PatientSelectionWindow)
+                {
+                    window.Show();
+                    isFound = true;
+                    break;
+                }
+            }
+
+            if (!isFound)
+            {
+                PatientSelectionWindow patientWindow = new PatientSelectionWindow();
+                patientWindow.Show();
+            }
+
+            this.Close();
+        }
+    }
+}
