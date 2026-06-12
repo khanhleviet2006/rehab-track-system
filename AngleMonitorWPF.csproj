@@ -262,22 +262,13 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Adobe Express - file.ico" />
-  </ItemGroup>
-  <ItemGroup>
     <Resource Include="tải-xuống-_1_.ico" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="game\game_dynamic.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="game\game_isometric.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="game\game_dynamic.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="game\game_isometric.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="game\style.css">

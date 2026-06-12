@@ -16,22 +16,17 @@
         FontFamily="{DynamicResource FontPrimary}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
-
-    <!-- Outer chrome with rounded corners + drop shadow -->
     <Border Style="{DynamicResource DialogWindowChrome}"
             Margin="20">
 
         <Grid>
             <Grid.RowDefinitions>
-                <!-- Title bar -->
                 <RowDefinition Height="Auto"/>
-                <!-- Scrollable body -->
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- ══════════════════════════════════════════════════════
-                 TITLE BAR  (drag to move)
-            ══════════════════════════════════════════════════════ -->
+            <!--
+                 TITLE BAR  (drag to move) -->
             <Border Grid.Row="0"
                     Style="{DynamicResource DialogTitleBar}"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
@@ -41,21 +36,15 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-
-                    <!-- App icon badge -->
                     <Border Grid.Column="0"
                             Style="{DynamicResource LogoBadge}">
                         <TextBlock Text="R"
                                    Style="{DynamicResource LogoBadgeText}"/>
                     </Border>
-
-                    <!-- Dialog title -->
                     <TextBlock Grid.Column="1"
                                Text="Xác thực hệ thống"
                                Style="{DynamicResource DialogTitleText}"
                                VerticalAlignment="Center"/>
-
-                    <!-- Close button -->
                     <Button Grid.Column="2"
                             Style="{DynamicResource ButtonClose}"
                             Click="BtnClose_Click"
@@ -70,11 +59,9 @@
                         Margin="32,28,32,32"
                         Orientation="Vertical">
 
-                <!-- ── Page heading ────────────────────────────────── -->
                 <TextBlock Text="ĐĂNG NHẬP HỆ THỐNG"
                            Style="{DynamicResource DialogHeading}"/>
 
-                <!-- ── MSBN field ───────────────────────────────────── -->
                 <StackPanel Style="{DynamicResource FormField}">
                     <TextBlock Text="Mã số bệnh nhân (MSBN)"
                                Style="{DynamicResource TextLabel}"/>
@@ -83,7 +70,6 @@
                              Height="44"/>
                 </StackPanel>
 
-                <!-- ── Action buttons ──────────────────────────────── -->
                 <Grid Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -105,7 +91,6 @@
                             Click="BtnHoSoMoi_Click"/>
                 </Grid>
 
-                <!-- ── Divider ─────────────────────────────────────── -->
                 <Grid Margin="0,24">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition/>
@@ -124,12 +109,10 @@
                                VerticalAlignment="Center"/>
                 </Grid>
 
-                <!-- ── Search field ─────────────────────────────────── -->
                 <StackPanel Style="{DynamicResource FormField}">
                     <TextBlock Text="Tìm kiếm từ danh sách:"
                                Style="{DynamicResource TextLabel}"/>
 
-                    <!-- Search box with magnifier icon overlay -->
                     <Grid>
                         <TextBox Style="{DynamicResource TextBoxBase}"
                                  Padding="40,10,12,10"
@@ -137,7 +120,7 @@
                                  Text="{Binding SearchQuery,
                                         UpdateSourceTrigger=PropertyChanged,
                                         Mode=TwoWay}"/>
-                        <!-- Magnifier icon -->
+
                         <Path Data="M 5 5 m -3 0 a 3 3 0 1 1 6 0 a 3 3 0 1 1 -6 0 M 7.1 7.1 L 10 10"
                               Stroke="{DynamicResource BrushTextPlaceholder}"
                               StrokeThickness="1.5"
@@ -151,8 +134,6 @@
                               IsHitTestVisible="False"/>
                     </Grid>
                 </StackPanel>
-
-                <!-- ── Patient list DataGrid ────────────────────────── -->
                 <Border CornerRadius="10"
                         BorderBrush="{DynamicResource BrushBorderDefault}"
                         BorderThickness="1"

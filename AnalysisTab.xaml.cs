@@ -34,11 +34,8 @@ namespace AngleMonitorWPF
 
     public partial class AnalysisTab : Window
     {
-        // Data binding cho Biểu đồ đường (Line Chart)
         public ChartValues<ObservablePoint> AngleValues { get; set; }
         public Func<double, string> TimeFormatter { get; set; }
-
-        // MỚI: Data binding cho Biểu đồ cột (Bar Chart)
         public ChartValues<int> RepDistributionValues { get; set; }
         public string[] HistogramLabels { get; set; }
 
@@ -48,12 +45,8 @@ namespace AngleMonitorWPF
         public AnalysisTab()
         {
             InitializeComponent();
-
-            // Khởi tạo data biểu đồ đường
             AngleValues = new ChartValues<ObservablePoint>();
             TimeFormatter = value => TimeSpan.FromSeconds(value).ToString(@"mm\:ss");
-
-            // MỚI: Khởi tạo data biểu đồ cột với 5 mốc mặc định bằng 0
             RepDistributionValues = new ChartValues<int> { 0, 0, 0, 0, 0 };
             HistogramLabels = new[] { "0-30°", "30-60°", "60-90°", "90-120°", ">120°" };
 
@@ -67,10 +60,7 @@ namespace AngleMonitorWPF
         {
             await LoadSessionsFromDatabaseAsync();
         }
-
-        // =======================================================================
         // 1. TẢI DANH SÁCH BUỔI TẬP (ASYNC)
-        // =======================================================================
         private async Task LoadSessionsFromDatabaseAsync()
         {
             try
@@ -83,7 +73,6 @@ namespace AngleMonitorWPF
 
                 using (SqlCommand cmd = new SqlCommand(query))
                 {
-                    // LƯU Ý: Đảm bảo biến GlobalData.CurrentUserId hợp lệ trong project của bạn
                     cmd.Parameters.AddWithValue("@pID", GlobalData.CurrentUserId);
 
                     using (SqlDataReader reader = await DatabaseHelper.ExecuteReaderAsync(cmd))
@@ -130,10 +119,7 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Lỗi tải lịch sử tập: " + ex.Message, "Lỗi Database", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        // =======================================================================
         // 2. TẢI ĐƯỜNG CONG BIỂU ĐỒ & TÍNH TOÁN HISTOGRAM (ASYNC)
-        // =======================================================================
         private async Task LoadChartDataForSessionAsync(SessionItem session)
         {
             try
@@ -143,7 +129,6 @@ namespace AngleMonitorWPF
                 if (session.ChartData != null && session.ChartData.Count > 0)
                 {
                     AngleValues.AddRange(session.ChartData);
-                    // Nếu đã có dữ liệu, vẫn tính Histogram nhưng chạy ngầm
                     var bins = await Task.Run(() => CalculateHistogram(session.ChartData));
                     for (int i = 0; i < 5; i++) RepDistributionValues[i] = bins[i];
                     return;
@@ -163,7 +148,6 @@ namespace AngleMonitorWPF
 
                             if (!string.IsNullOrEmpty(jsonString))
                             {
-                                // ĐẨY XUỐNG LUỒNG NỀN XỬ LÝ (TỐI ƯU 1)
                                 var processedResult = await Task.Run(() =>
                                 {
                                     var historyData = JsonSerializer.Deserialize<List<SessionDataPoint>>(jsonString);
@@ -172,14 +156,12 @@ namespace AngleMonitorWPF
 
                                     if (historyData != null && historyData.Count > 0)
                                     {
-                                        // Giảm mẫu (Downsampling) xuống tối đa ~500 điểm
                                         int step = Math.Max(1, historyData.Count / 500);
                                         for (int i = 0; i < historyData.Count; i += step)
                                         {
                                             chartPoints.Add(new ObservablePoint(historyData[i].Time, historyData[i].Angle));
                                         }
 
-                                        // Tính Histogram trực tiếp trên data gốc
                                         for (int i = 1; i < historyData.Count - 1; i++)
                                         {
                                             double prevY = historyData[i - 1].Angle;
@@ -193,14 +175,12 @@ namespace AngleMonitorWPF
                                                 else if (currY <= 90) bins[2]++;
                                                 else if (currY <= 120) bins[3]++;
                                                 else bins[4]++;
-                                                i += 5; // Bỏ qua đỉnh nhiễu
+                                                i += 5;
                                             }
                                         }
                                     }
                                     return new { Points = chartPoints, Bins = bins };
                                 });
-
-                                // TRỞ LẠI UI THREAD: Cập nhật giao diện mượt mà
                                 session.ChartData = processedResult.Points;
                                 AngleValues.AddRange(processedResult.Points);
 
@@ -218,8 +198,6 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Lỗi tải dữ liệu biểu đồ: " + ex.Message, "Lỗi Database", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        // Thêm hàm hỗ trợ nhỏ này ngay dưới hàm LoadChartDataForSessionAsync:
         private int[] CalculateHistogram(List<ObservablePoint> points)
         {
             int[] bins = new int[5];
@@ -243,16 +221,13 @@ namespace AngleMonitorWPF
         }
         private void ResetRepDistribution()
         {
-            // Gán trực tiếp giá trị 0 thay vì gọi lệnh Clear()
             for (int i = 0; i < 5; i++)
             {
                 RepDistributionValues[i] = 0;
             }
         }
 
-        // =======================================================================
         // SỰ KIỆN TƯƠNG TÁC GIAO DIỆN
-        // =======================================================================
         private void UpdateSessionUI(SessionItem s)
         {
             PeakRomValue.Text = s.PeakRom.ToString("F1");
@@ -260,7 +235,6 @@ namespace AngleMonitorWPF
             RepsValue.Text = s.Reps.ToString();
             DurationValue.Text = s.Duration.ToString();
 
-            // Cập nhật biến ngày tháng thay vì đẩy ra UI
             if (DateTime.TryParseExact(s.Date, "yyyy-MM-dd HH:mm",
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
@@ -281,11 +255,7 @@ namespace AngleMonitorWPF
                 await LoadChartDataForSessionAsync(s);
             }
         }
-
-        // =======================================================================
         // 3. XỬ LÝ XUẤT PDF QUA WEBVIEW2 VÀ MÃ HTML MẪU
-        // =======================================================================
-
         private string GetChartBase64(UIElement chartControl)
         {
             chartControl.UpdateLayout();
@@ -306,8 +276,6 @@ namespace AngleMonitorWPF
                 return "data:image/png;base64," + Convert.ToBase64String(imageBytes);
             }
         }
-
-        // MỚI: HÀM TẠO CỬA SỔ POPUP NHẬP GHI CHÚ BẰNG CODE (Không cần file XAML mới)
         private string PromptForDoctorNotes()
         {
             Window prompt = new Window()
@@ -370,10 +338,7 @@ namespace AngleMonitorWPF
         {
             try
             {
-                // 1. LÝ GHI CHÚ CỦA BÁC SĨ VIA POPUP
                 string doctorNotes = PromptForDoctorNotes();
-
-                // 2. MỞ HỘP THOẠI CHỌN NƠI LƯU FILE
                 SaveFileDialog saveFileDialog = new SaveFileDialog();
                 saveFileDialog.Filter = "PDF Document|*.pdf";
                 saveFileDialog.Title = "Chọn file để lưu mới hoặc gộp (Append) vào file cũ";
@@ -382,17 +347,11 @@ namespace AngleMonitorWPF
                 if (saveFileDialog.ShowDialog() == true)
                 {
                     string finalFilePath = saveFileDialog.FileName;
-
-                    // Tạo file tạm thời
                     string tempFilePath = Path.Combine(Path.GetTempPath(), $"TempReport_{Guid.NewGuid()}.pdf");
 
                     await PdfWebView.EnsureCoreWebView2Async();
-
-                    // MỚI: Chụp cả 2 biểu đồ (Biểu đồ đường và Biểu đồ cột Histogram)
                     string chartBase64 = GetChartBase64(MyChart);
                     string barChartBase64 = GetChartBase64(MyBarChart);
-
-                    // Xử lý chuỗi HTML ghi chú
                     string noteHtml = string.IsNullOrWhiteSpace(doctorNotes)
                         ? ""
                         : $"<div class='doctor-notes'><strong>Nhận xét:</strong> {doctorNotes.Replace("\r\n", "<br/>").Replace("\n", "<br/>")}</div>";
@@ -513,7 +472,6 @@ namespace AngleMonitorWPF
                 </div>
             </body>
             </html>";
-                    // ===== THAY THẾ BIẾN (DÙNG STRINGBUILDER ĐỂ TỐI ƯU RAM) =====
                     System.Text.StringBuilder htmlBuilder = new System.Text.StringBuilder(htmlContent);
 
                     htmlBuilder.Replace("{{DateToday}}", DateTime.Now.ToString("dd/MM/yyyy"));
@@ -533,16 +491,10 @@ namespace AngleMonitorWPF
                     htmlBuilder.Replace("{{AvgRom}}", AvgRomValue.Text);
                     htmlBuilder.Replace("{{Reps}}", RepsValue.Text);
                     htmlBuilder.Replace("{{Duration}}", DurationValue.Text);
-
-                    // Nhúng dữ liệu hình ảnh 2 biểu đồ vào HTML
                     htmlBuilder.Replace("{{ChartImage}}", chartBase64);
                     htmlBuilder.Replace("{{BarChartImage}}", barChartBase64);
                     htmlBuilder.Replace("{{DoctorNotes}}", noteHtml);
-
-                    // Xuất ra chuỗi cuối cùng duy nhất
                     string finalHtmlToRender = htmlBuilder.ToString();
-
-                    // Chờ WebView2 Load nội dung HTML hoàn tất
                     bool isLoaded = false;
                     EventHandler<CoreWebView2NavigationCompletedEventArgs> loadHandler = null;
                     loadHandler = (s, args) =>
@@ -551,8 +503,6 @@ namespace AngleMonitorWPF
                         PdfWebView.CoreWebView2.NavigationCompleted -= loadHandler;
                     };
                     PdfWebView.CoreWebView2.NavigationCompleted += loadHandler;
-
-                    // Đưa chuỗi đã tối ưu vào WebView2
                     PdfWebView.NavigateToString(finalHtmlToRender);
 
                     while (!isLoaded) await Task.Delay(100);
@@ -563,13 +513,10 @@ namespace AngleMonitorWPF
                     printSettings.ShouldPrintBackgrounds = true;
                     printSettings.MarginBottom = 0; printSettings.MarginTop = 0;
                     printSettings.MarginLeft = 0; printSettings.MarginRight = 0;
-
-                    // In ra file tạm trước
                     bool isSuccessful = await PdfWebView.CoreWebView2.PrintToPdfAsync(tempFilePath, printSettings);
 
                     if (isSuccessful)
                     {
-                        // XỬ LÝ GỘP FILE VỚI PDFSHARP
                         if (File.Exists(finalFilePath))
                         {
                             using (PdfSharp.Pdf.PdfDocument targetDoc = PdfSharp.Pdf.IO.PdfReader.Open(finalFilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify))

@@ -6,15 +6,12 @@ namespace AngleMonitorWPF
 {
     public static class DataOptimizer
     {
-        // Hàm tính khoảng cách vuông góc từ 1 điểm đến 1 đoạn thẳng
         private static double PerpendicularDistance(SessionDataPoint point, SessionDataPoint lineStart, SessionDataPoint lineEnd)
         {
             double area = Math.Abs(0.5 * (lineStart.Time * lineEnd.Angle + lineEnd.Time * point.Angle + point.Time * lineStart.Angle - lineEnd.Time * lineStart.Angle - point.Time * lineEnd.Angle - lineStart.Time * point.Angle));
             double bottom = Math.Sqrt(Math.Pow(lineStart.Time - lineEnd.Time, 2) + Math.Pow(lineStart.Angle - lineEnd.Angle, 2));
             return (area / bottom) * 2.0;
         }
-
-        // Hàm đệ quy RDP
         public static List<SessionDataPoint> RDP(List<SessionDataPoint> points, double epsilon)
         {
             if (points == null || points.Count < 3)

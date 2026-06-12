@@ -6,20 +6,14 @@ using System.Threading.Tasks;
 
 namespace AngleMonitorWPF
 {
-    // =====================================
     // LƯU TRỮ TRẠNG THÁI NGƯỜI DÙNG
-    // =====================================
     public static class GlobalData
     {
-        public static int CurrentUserId { get; set; } = -1; // -1: Chưa đăng nhập
+        public static int CurrentUserId { get; set; } = -1; 
     }
-
-    // =====================================
     // DATABASE HELPER (Xử lý kết nối SQL)
-    // =====================================
     public static class DatabaseHelper
     {
-        // Connection string giữ nguyên theo máy của bạn
         private static readonly string connectionString = @"Server=DESKTOP-GUAOG8U;Database=RehabDB;Integrated Security=True;";
 
         public static SqlConnection GetConnection()
@@ -60,20 +54,14 @@ namespace AngleMonitorWPF
                 return null;
             }
         }
-        // =====================================
         // THÊM MỚI: HÀM ĐỌC DỮ LIỆU BẤT ĐỒNG BỘ CHO ANALYSIS TAB
-        // =====================================
         public static async Task<SqlDataReader> ExecuteReaderAsync(SqlCommand cmd)
         {
             try
             {
                 SqlConnection conn = GetConnection();
                 cmd.Connection = conn;
-
-                // Mở kết nối không khóa luồng giao diện
                 await conn.OpenAsync();
-
-                // Trả về luồng đọc bất đồng bộ
                 return await cmd.ExecuteReaderAsync(CommandBehavior.CloseConnection);
             }
             catch (Exception ex)
@@ -82,8 +70,6 @@ namespace AngleMonitorWPF
                 return null;
             }
         }
-
-        // THÊM MỚI: Hàm ExecuteScalar dùng để thực thi lệnh INSERT và lấy ID tự tăng
         public static int ExecuteScalar(SqlCommand cmd)
         {
             try
@@ -106,22 +92,12 @@ namespace AngleMonitorWPF
                 return -1;
             }
         }
-
-        // =====================================
-        // CÁC HÀM XỬ LÝ THEO BUỔI TẬP (SESSION)
-        // =====================================
-
-        /// <summary>
-        /// Tạo buổi tập mới khi ấn Bắt đầu. Trả về SessionId vừa được tạo.
-        /// </summary>
         public static int CreateNewSession()
         {
             if (GlobalData.CurrentUserId == -1)
             {
                 return -1;
             }
-
-            // Lệnh OUTPUT INSERTED.SessionId sẽ trả về ID tự động tăng vừa được tạo
             string query = @"INSERT INTO dbo.TrainingSessions (UserId, StartTime) 
                              OUTPUT INSERTED.SessionId 
                              VALUES (@UserId, GETDATE())";
@@ -130,16 +106,11 @@ namespace AngleMonitorWPF
             {
                 cmd.Parameters.AddWithValue("@UserId", GlobalData.CurrentUserId);
 
-                return ExecuteScalar(cmd); // Gọi hàm mới thêm ở trên
+                return ExecuteScalar(cmd);
             }
         }
-
-        /// <summary>
-        /// Gọi 1 lần duy nhất khi kết thúc bài tập để lưu tổng hợp và chuỗi JSON tọa độ.
-        /// </summary>
         public static void SaveSessionData(int sessionId, int reps, double peakRom, double avgRom, string chartDataJson)
         {
-            // Tránh lỗi nếu sessionId không hợp lệ
             if (sessionId == -1) return;
 
             string query = @"UPDATE dbo.TrainingSessions 
@@ -161,14 +132,5 @@ namespace AngleMonitorWPF
                 ExecuteNonQuery(cmd);
             }
         }
-
-        /* ĐÃ VÔ HIỆU HÓA: Hàm InsertSensorData cũ
-        Không dùng nữa để tránh lỗi tràn bộ nhớ / giật lag khi ghi dữ liệu thô liên tục
-        
-        public static void InsertSensorData(double angle, double forceWeight)
-        {
-            ...
-        }
-        */
     }
 }

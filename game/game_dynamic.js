@@ -1,32 +1,23 @@
 'use strict';
-/* ═══════════════════════════════════════════════════════════════════
-   PHI THUYỀN KHÔNG GIAN – Dynamic ROM  |  RehabTrack v1.0
+/*PHI THUYỀN KHÔNG GIAN – Dynamic ROM  |  RehabTrack v1.0
    Tích hợp: C# WPF WebView2 + MPU6050 Elbow Sensor
-   Kiến trúc: OOP ES6 – Pure HTML5 Canvas – 60 FPS
-═══════════════════════════════════════════════════════════════════ */
+   Kiến trúc: OOP ES6 – Pure HTML5 Canvas – 60 FPS */
 
-/* ───────────────────────────────────────────────
-   HẰNG SỐ CẤU HÌNH
-─────────────────────────────────────────────── */
 const CONFIG = {
-  TARGET_ROM:        140,   // Góc mục tiêu (°) - full extension
-  REP_HIGH_THRESH:   0.90,  // 90% Target → tính gập thành công
-  REP_LOW_THRESH:    0.20,  // 20% Target → tính duỗi thành công
-  LERP_FACTOR:       0.10,  // Hệ số nội suy mượt (0-1, nhỏ = mượt hơn)
+  TARGET_ROM:        140,
+  REP_HIGH_THRESH:   0.90,
+  REP_LOW_THRESH:    0.20,
+  LERP_FACTOR:       0.10,
   MAX_HEALTH:        5,
-  COIN_SPAWN_RATE:   90,    // frames giữa các coin
+  COIN_SPAWN_RATE:   90,
   ASTEROID_SPAWN_RATE: 150,
-  BONUS_ANGLE_TOL:   8,     // ±8° tính là đang ở Peak zone
+  BONUS_ANGLE_TOL:   8,
   SCROLL_SPEED_BASE: 2.5,
   SCROLL_SPEED_MAX:  6,
   PARALLAX_LAYERS:   3,
   STAR_COUNT:        200,
   NEBULA_COUNT:      5,
 };
-
-/* ═══════════════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════════════ */
 const lerp  = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand  = (lo, hi) => Math.random() * (hi - lo) + lo;
@@ -39,9 +30,7 @@ function hexToRgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: MedicalMetrics  (Logic Y Khoa)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: MedicalMetrics  (Logic Y Khoa)*/
 class MedicalMetrics {
   constructor(targetRom = CONFIG.TARGET_ROM) {
     this.targetRom   = targetRom;
@@ -50,7 +39,7 @@ class MedicalMetrics {
     this.romReadings = [];
     this.sessionStart = Date.now();
 
-    this._phase = 'waiting';  // waiting | flexing | extending
+    this._phase = 'waiting'; 
     this._highThresh = targetRom * CONFIG.REP_HIGH_THRESH;
     this._lowThresh  = targetRom * CONFIG.REP_LOW_THRESH;
     this._peakThisFlex = 0;
@@ -127,9 +116,7 @@ class MedicalMetrics {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Star  (Nền ngôi sao – Parallax)
-═══════════════════════════════════════════════════════════════════ */
+/* CLASS: Star  (Nền ngôi sao – Parallax) */
 class Star {
   constructor(W, H, layer) {
     this.W = W; this.H = H;
@@ -170,9 +157,7 @@ class Star {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Nebula  (Đám mây tinh vân trang trí)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: Nebula  (Đám mây tinh vân trang trí) */
 class Nebula {
   constructor(W, H) {
     this.W = W; this.H = H;
@@ -213,9 +198,7 @@ class Nebula {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Particle  (Hiệu ứng nổ & Thu thập)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: Particle  (Hiệu ứng nổ & Thu thập) */
 class Particle {
   constructor(x, y, color, type = 'explode') {
     this.x = x; this.y = y;
@@ -257,9 +240,7 @@ class Particle {
   get dead() { return this.life <= 0 || this.size < 0.3; }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Player  (Phi thuyền)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: Player  (Phi thuyền)*/
 class Player {
   constructor(W, H) {
     this.W = W; this.H = H;
@@ -416,9 +397,7 @@ class Player {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Coin  (Vật phẩm ăn điểm)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: Coin  (Vật phẩm ăn điểm)*/
 class Coin {
   constructor(W, H) {
     this.W = W; this.H = H;
@@ -492,9 +471,7 @@ class Coin {
   get hitRadius() { return this.r * 1.4; }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Asteroid  (Chướng ngại vật)
-═══════════════════════════════════════════════════════════════════ */
+/* CLASS: Asteroid  (Chướng ngại vật)*/
 class Asteroid {
   constructor(W, H) {
     this.W = W; this.H = H;
@@ -575,9 +552,7 @@ class Asteroid {
   get hitRadius() { return this.r * 0.78; }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: BonusItem  (Vật phẩm tại góc Peak ROM)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: BonusItem  (Vật phẩm tại góc Peak ROM)*/
 class BonusItem {
   constructor(W, H, targetY) {
     this.W = W; this.H = H;
@@ -648,9 +623,7 @@ class BonusItem {
   get hitRadius() { return this.r * 1.5; }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: CollisionManager
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: CollisionManager */
 class CollisionManager {
   static circle(ax, ay, ar, bx, by, br) {
     const dx = ax - bx, dy = ay - by;
@@ -672,9 +645,7 @@ class CollisionManager {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: HUD  (Heads-Up Display)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: HUD  (Heads-Up Display) */
 class HUD {
   constructor(W, H) {
     this.W = W; this.H = H;
@@ -819,17 +790,14 @@ class HUD {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CLASS: Game  (Vòng lặp chính)
-═══════════════════════════════════════════════════════════════════ */
+/*CLASS: Game  (Vòng lặp chính)*/
 class Game {
   constructor() {
     this.canvas  = document.getElementById('gameCanvas');
     this.ctx     = this.canvas.getContext('2d');
     this._resize();
 
-    this.state   = 'playing'; // playing | dead | gameover
-    // THÊM MỚI: Mặc định game sẽ dừng khi vừa mở lên
+    this.state   = 'playing';
     this.isPaused = true;     
     
     this.frame   = 0;
@@ -884,8 +852,6 @@ class Game {
 
   receiveAngle(rawAngle) {
     this.elbowAngle = clamp(parseFloat(rawAngle) || 0, 0, CONFIG.TARGET_ROM);
-    
-    // Nếu game đang pause hoặc không ở trạng thái playing, không xử lý logic di chuyển
     if (this.state !== 'playing' || this.isPaused) return;
 
     const repDone = this.metrics.update(this.elbowAngle);
@@ -901,7 +867,6 @@ class Game {
     if (e.key === 'ArrowUp')   this.receiveAngle(Math.min(this.elbowAngle + step, 140));
     if (e.key === 'ArrowDown') this.receiveAngle(Math.max(this.elbowAngle - step, 0));
     if (e.key === 'r' || e.key === 'R') this.restartGame();
-    // Test Pause bằng phím P
     if (e.key === 'p' || e.key === 'P') this.isPaused = !this.isPaused;
   }
 
@@ -922,7 +887,6 @@ class Game {
   }
 
   _update() {
-    // THÊM MỚI: Nếu game đang Pause, dừng toàn bộ cập nhật (ko sinh coin, ko sinh đá, đứng hình)
     if (this.state !== 'playing' || this.isPaused) return;
     
     this.frame++;
@@ -1071,7 +1035,7 @@ class Game {
     document.getElementById('exportFeedback').classList.add('hidden');
 
     this.state       = 'playing';
-    this.isPaused    = false; // Khi người dùng bấm restart, cho chạy luôn
+    this.isPaused    = false;
     this.frame       = 0;
     this.scrollMult  = 1;
     this.elbowAngle  = 0;
@@ -1135,8 +1099,6 @@ class Game {
       ctx.fillText('Đang tổng kết kết quả...', W / 2, H / 2 + 24);
       ctx.restore();
     }
-    
-    // THÊM MỚI: Lớp phủ mờ hiển thị thông báo khi game đang Pause
     if (this.isPaused && this.state === 'playing') {
       ctx.save();
       ctx.fillStyle = 'rgba(2, 8, 16, 0.65)';
@@ -1216,9 +1178,7 @@ class Game {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   API TOÀN CỤC  –  C# WPF gọi qua ExecuteScriptAsync
-═══════════════════════════════════════════════════════════════════ */
+/*API TOÀN CỤC  –  C# WPF gọi qua ExecuteScriptAsync */
 
 window.updateAngle = function(angle) {
   if (window.gameInstance) {
@@ -1231,8 +1191,6 @@ function exportData() {
     window.gameInstance.exportData();
   }
 }
-
-// THÊM MỚI: API cho phép C# (hoặc HTML) kích hoạt trạng thái Chạy/Dừng
 window.startGame = function() {
   if (window.gameInstance) {
     window.gameInstance.isPaused = false;
@@ -1247,9 +1205,7 @@ window.pauseGame = function() {
   }
 };
 
-/* ═══════════════════════════════════════════════════════════════════
-   KHỞI ĐỘNG
-═══════════════════════════════════════════════════════════════════ */
+/*KHỞI ĐỘNG */
 window.addEventListener('DOMContentLoaded', () => {
   const loading = document.getElementById('loadingScreen');
 
@@ -1258,7 +1214,6 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       loading.style.display = 'none';
       window.gameInstance = new Game();
-      // Game sẽ được khởi tạo với trạng thái isPaused = true ở Constructor
     }, 600);
   }, 2000);
 });

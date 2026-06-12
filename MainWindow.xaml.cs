@@ -43,14 +43,12 @@ namespace AngleMonitorWPF
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-
         // --- BIẾN TỐI ƯU LUỒNG DỮ LIỆU ---
         private bool isGamePaused = true;
         private ConcurrentQueue<(double Angle, double Accel, double Time)> _dataQueue = new ConcurrentQueue<(double, double, double)>();
         private int _sampleCounter = 0;
         private readonly int DOWN_SAMPLE_FACTOR = 3;
         private DispatcherTimer _uiUpdateTimer;
-
         private DispatcherTimer _stopwatchTimer;
         private TimeSpan _elapsedTime;
         private double _tempAngle = 0;
@@ -58,25 +56,19 @@ namespace AngleMonitorWPF
         private SerialPort _serialPort;
         private bool _isConnected = false;
         private RehabSession _currentSession;
-
-        // =============================================
         // --- THUẬT TOÁN PEAK-TO-VALLEY STATE ---
-        // =============================================
         private double _peak = double.MinValue;
         private double _valley = double.MaxValue;
         private bool _lookingForValley = false;
-
         // --- REPS & HISTOGRAM ---
         private int _repCount = 0;
         private List<double> _sessionMaxAngles = new List<double>();
         private double _sessionMaxSpeed = 0;
-
         // --- GIẢ LẬP & THỜI GIAN ---
         private DispatcherTimer _simTimer;
         private double _simTimeCounter = 0;
         private Random _rnd = new Random();
         private DateTime _startTime = DateTime.MinValue;
-
         // --- LIVECHARTS BINDING ---
         public ChartValues<ObservablePoint> AngleValues { get; set; }
         public ChartValues<ObservablePoint> UpperThresholdValues { get; set; }
@@ -120,17 +112,12 @@ namespace AngleMonitorWPF
             _uiUpdateTimer.Tick += ProcessQueueToUI;
             _uiUpdateTimer.Start();
         }
-
-        // ==========================================================
         // --- KHỞI TẠO VÀ XỬ LÝ SỰ KIỆN WEBVIEW2 (GAME) ---
-        // ==========================================================
         private async void InitializeWebViewAsync()
         {
             try
             {
                 await webViewGame.EnsureCoreWebView2Async(null);
-
-                // Mặc định load Game 1 (Dynamic ROM) khi vừa mở phần mềm
                 string defaultGamePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Game", "game_dynamic.html");
                 if (File.Exists(defaultGamePath))
                 {
@@ -140,42 +127,11 @@ namespace AngleMonitorWPF
                 {
                     webViewGame.CoreWebView2.NavigateToString("<html><body><h2>Không tìm thấy file Game!</h2><p>Vui lòng copy thư mục 'Game' vào thư mục Debug của phần mềm.</p></body></html>");
                 }
-
-                // Nhận tín hiệu kết thúc từ Game
                 webViewGame.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi khởi tạo WebView2: " + ex.Message);
-            }
-        }
-
-        // ==========================================================
-        // --- SỰ KIỆN ĐỔI GAME KHI BÁC SĨ CHỌN COMBOBOX ---
-        // ==========================================================
-        private void cboGameType_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (webViewGame == null || webViewGame.CoreWebView2 == null) return;
-
-            string gameFileName = "game_dynamic.html"; // Mặc định
-
-            if (cboGameType.SelectedIndex == 0)
-            {
-                gameFileName = "game_dynamic.html";
-            }
-            else if (cboGameType.SelectedIndex == 1)
-            {
-                gameFileName = "game_isometric.html";
-            }
-
-            string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Game", gameFileName);
-            if (File.Exists(fullPath))
-            {
-                webViewGame.CoreWebView2.Navigate(fullPath);
-            }
-            else
-            {
-                webViewGame.CoreWebView2.NavigateToString($"<html><body><h2>Không tìm thấy file {gameFileName}!</h2><p>Vui lòng kiểm tra lại thư mục 'Game'.</p></body></html>");
             }
         }
         private void CalculateReps(double angle)
@@ -185,8 +141,6 @@ namespace AngleMonitorWPF
                 _peak = angle;
                 _valley = angle;
             }
-
-            // Lấy thông số cấu hình do bác sĩ thiết lập
             double currentNoiseMargin = DeviceSettings.NoiseMargin;
             double currentMinDelta = DeviceSettings.MinDeltaForRep;
 
@@ -211,14 +165,9 @@ namespace AngleMonitorWPF
                 else if (angle - _valley >= currentNoiseMargin)
                 {
                     double delta = _peak - _valley;
-
-                    // SO SÁNH VỚI NGƯỠNG ĐỘNG (currentMinDelta) THAY VÌ FIX CỨNG 40.0
                     if (delta >= currentMinDelta)
                     {
                         _repCount++;
-
-                        // Vì CalculateReps không chạy trên Main Thread (sau khi ta đã tối ưu), 
-                        // cần dùng Dispatcher để cập nhật UI tránh lỗi văng app
                         Dispatcher.Invoke(() =>
                         {
                             txtReps.Text = _repCount.ToString();
@@ -237,10 +186,7 @@ namespace AngleMonitorWPF
         }
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            // Nhận chuỗi JSON kết quả từ game.js
             string jsonResult = e.TryGetWebMessageAsString();
-
-            // Hiện hộp thoại hoặc xử lý lưu JSON này vào Database SQL của hệ thống
             MessageBox.Show("Bài tập Game đã hoàn thành!\nDữ liệu nhận được: " + jsonResult, "Thông báo hệ thống", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
@@ -252,21 +198,15 @@ namespace AngleMonitorWPF
             {
                 chartAngle.Visibility = Visibility.Visible;
                 webViewGame.Visibility = Visibility.Collapsed;
-
-                // Ẩn combobox chọn game nếu đang ở chế độ Lâm sàng
                 if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
             }
             else if (rbGameMode.IsChecked == true)
             {
                 chartAngle.Visibility = Visibility.Collapsed;
                 webViewGame.Visibility = Visibility.Visible;
-
-                // Hiện combobox chọn game nếu đang ở chế độ Trò chơi
-                if (cboGameType != null) cboGameType.Visibility = Visibility.Visible;
+                if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
             }
         }
-        // ==========================================================
-
         private async Task<string> AutoFindBluetoothPortAsync()
         {
             return await Task.Run(() =>
@@ -311,9 +251,7 @@ namespace AngleMonitorWPF
                 {
                     Mouse.OverrideCursor = Cursors.Wait;
                     txtStatus.Text = "● Đang quét tìm thiết bị Bluetooth...";
-                    btnStartStop.IsEnabled = false; // Tạm khóa nút để tránh double-click
-
-                    // Chạy quét ở luồng nền, giao diện vẫn mượt mà
+                    btnStartStop.IsEnabled = false;
                     string congTuDong = await AutoFindBluetoothPortAsync();
 
                     Mouse.OverrideCursor = null;
@@ -325,8 +263,6 @@ namespace AngleMonitorWPF
                         txtStatus.Text = "● Chưa kết nối";
                         return;
                     }
-
-                    // ... (Giữ nguyên phần khởi tạo SerialPort và các biến khác của bạn ở đây) ...
                     AngleValues.Clear();
                     UpperThresholdValues.Clear();
                     LowerThresholdValues.Clear();
@@ -356,7 +292,6 @@ namespace AngleMonitorWPF
                         btnPauseResumeGame.Visibility = Visibility.Visible;
                         if (webViewGame != null && webViewGame.CoreWebView2 != null)
                         {
-                            // ĐỔI THÀNH window.startGame(); 
                             await webViewGame.CoreWebView2.ExecuteScriptAsync("window.startGame();");
                             isGamePaused = false;
                             btnPauseResumeGame.Content = "⏸ Tạm dừng Game";
@@ -366,13 +301,10 @@ namespace AngleMonitorWPF
                 }
                 else
                 {
-                    // ... (Giữ nguyên phần ngắt kết nối của bạn) ...
                     if (_serialPort != null && _serialPort.IsOpen)
                     {
                         _serialPort.Close();
                     }
-
-                    // THÊM ĐOẠN NÀY ĐỂ KHÓA GAME KHI NGẮT KẾT NỐI
                     if (webViewGame != null && webViewGame.CoreWebView2 != null)
                     {
                         await webViewGame.CoreWebView2.ExecuteScriptAsync("window.stopGame();");
@@ -400,8 +332,6 @@ namespace AngleMonitorWPF
             try
             {
                 string data = _serialPort.ReadLine().Trim();
-
-                // Xử lý chuỗi siêu tốc độ bằng Substring thay vì Regex đắt đỏ
                 if (data.StartsWith("Angle:", StringComparison.OrdinalIgnoreCase))
                 {
                     string numberOnly = data.Substring(6).Trim();
@@ -417,10 +347,7 @@ namespace AngleMonitorWPF
             }
             catch { }
         }
-
-        // =========================================================================
         // TỐI ƯU 4: TỐI ƯU RENDER BIỂU ĐỒ VÀ WEBVIEW2 TRONG BỘ ĐỊNH THỜI 40MS
-        // =========================================================================
         private void ProcessQueueToUI(object sender, EventArgs e)
         {
             if (_dataQueue.IsEmpty) return;
@@ -469,9 +396,6 @@ namespace AngleMonitorWPF
                     UpperThresholdValues.AddRange(newUppers);
                     LowerThresholdValues.AddRange(newLowers);
                     ForceValues.AddRange(newForces);
-
-                    // TỐI ƯU: Tính toán số lượng cần xóa để xóa 1 lần bằng vòng for thay vì while
-                    // Giảm tải cho LiveCharts NotifyCollectionChanged
                     int overflowCount = AngleValues.Count - 500;
                     if (overflowCount > 0)
                     {
@@ -484,9 +408,6 @@ namespace AngleMonitorWPF
                         }
                     }
                 }
-
-                // TỐI ƯU: Chỉ gửi dữ liệu sang WebView2 Game nếu góc lệch > 0.5 độ so với lần cuối
-                // Giúp trình duyệt không bị nghẽn (Throttle)
                 if (webViewGame.Visibility == Visibility.Visible && webViewGame.CoreWebView2 != null)
                 {
                     if (Math.Abs(latestAngle - _lastSentAngleToGame) > 0.5)
@@ -495,7 +416,7 @@ namespace AngleMonitorWPF
                         string script = $"if (typeof updateAngle === 'function') {{ updateAngle({angleString}); }}";
                         webViewGame.CoreWebView2.ExecuteScriptAsync(script);
 
-                        _lastSentAngleToGame = latestAngle; // Cập nhật lại góc cuối
+                        _lastSentAngleToGame = latestAngle;
                     }
                 }
             }
@@ -516,7 +437,6 @@ namespace AngleMonitorWPF
 
             if (!isGamePaused)
             {
-                // Đang chạy -> Bấm để Tạm dừng
                 await webViewGame.CoreWebView2.ExecuteScriptAsync("pauseGame();");
                 btnPauseResumeGame.Content = "▶ Tiếp tục Game";
                 btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981")); // Đổi màu xanh lá
@@ -524,7 +444,6 @@ namespace AngleMonitorWPF
             }
             else
             {
-                // Đang tạm dừng -> Bấm để Chạy tiếp
                 await webViewGame.CoreWebView2.ExecuteScriptAsync("startGame();");
                 btnPauseResumeGame.Content = "⏸ Tạm dừng Game";
                 btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B")); // Đổi màu cam

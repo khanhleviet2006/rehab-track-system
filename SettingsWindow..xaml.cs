@@ -20,7 +20,6 @@ namespace AngleMonitorWPF
 
         private void btnSave_Click(object sender, RoutedEventArgs e)
         {
-            // 1. Lưu Hiệu đỉnh - đáy
             if (double.TryParse(txtMinDelta.Text.Trim(), out double newDelta) && newDelta > 0)
             {
                 DeviceSettings.MinDeltaForRep = newDelta;
@@ -30,8 +29,6 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Vui lòng nhập số hợp lệ lớn hơn 0 cho Hiệu đỉnh - đáy!", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-
-            // 2. Lưu Ngưỡng nhiễu
             if (double.TryParse(txtNoiseMargin.Text.Trim(), out double newNoise) && newNoise >= 0)
             {
                 DeviceSettings.NoiseMargin = newNoise;
@@ -41,8 +38,6 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Vui lòng nhập số hợp lệ cho Ngưỡng nhiễu!", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-
-            // 3. Lưu Mức tạ
             if (double.TryParse(txtWeight.Text.Trim(), out double newWeight) && newWeight >= 0)
             {
                 DeviceSettings.DumbbellWeight = newWeight;
