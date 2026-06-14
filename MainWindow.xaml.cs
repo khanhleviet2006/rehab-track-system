@@ -17,11 +17,15 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Globalization;
 
 namespace AngleMonitorWPF
 {
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
+        private string _serialBuffer = "";
         private double _lastSentAngleToGame = -999.0;
 
         private double _axisMax;
@@ -43,9 +47,12 @@ namespace AngleMonitorWPF
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
         // --- BIẾN TỐI ƯU LUỒNG DỮ LIỆU ---
         private bool isGamePaused = true;
-        private ConcurrentQueue<(double Angle, double Accel, double Time)> _dataQueue = new ConcurrentQueue<(double, double, double)>();
+        private ConcurrentQueue<(double Angle, double Time)> _dataQueue = new ConcurrentQueue<(double, double)>();
+        private Queue<double> _smoothingBuffer = new Queue<double>();
+        private const int SMOOTHING_WINDOW = 10;
         private int _sampleCounter = 0;
         private readonly int DOWN_SAMPLE_FACTOR = 3;
         private DispatcherTimer _uiUpdateTimer;
@@ -56,24 +63,27 @@ namespace AngleMonitorWPF
         private SerialPort _serialPort;
         private bool _isConnected = false;
         private RehabSession _currentSession;
+
         // --- THUẬT TOÁN PEAK-TO-VALLEY STATE ---
         private double _peak = double.MinValue;
         private double _valley = double.MaxValue;
         private bool _lookingForValley = false;
+
         // --- REPS & HISTOGRAM ---
         private int _repCount = 0;
         private List<double> _sessionMaxAngles = new List<double>();
         private double _sessionMaxSpeed = 0;
+
         // --- GIẢ LẬP & THỜI GIAN ---
         private DispatcherTimer _simTimer;
         private double _simTimeCounter = 0;
         private Random _rnd = new Random();
         private DateTime _startTime = DateTime.MinValue;
+
         // --- LIVECHARTS BINDING ---
         public ChartValues<ObservablePoint> AngleValues { get; set; }
         public ChartValues<ObservablePoint> UpperThresholdValues { get; set; }
         public ChartValues<ObservablePoint> LowerThresholdValues { get; set; }
-        public ChartValues<ObservablePoint> ForceValues { get; set; }
         public ChartValues<int> HistogramValues { get; set; }
         public string[] HistogramLabels { get; set; }
         public Func<double, string> TimeFormatter { get; set; }
@@ -85,7 +95,6 @@ namespace AngleMonitorWPF
             AngleValues = new ChartValues<ObservablePoint>();
             UpperThresholdValues = new ChartValues<ObservablePoint>();
             LowerThresholdValues = new ChartValues<ObservablePoint>();
-            ForceValues = new ChartValues<ObservablePoint>();
             TimeFormatter = value => value.ToString("0") + "s";
 
             HistogramValues = new ChartValues<int> { 0, 0, 0, 0, 0, 0 };
@@ -108,10 +117,11 @@ namespace AngleMonitorWPF
             };
 
             _uiUpdateTimer = new DispatcherTimer();
-            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(40);
+            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(50);
             _uiUpdateTimer.Tick += ProcessQueueToUI;
             _uiUpdateTimer.Start();
         }
+
         // --- KHỞI TẠO VÀ XỬ LÝ SỰ KIỆN WEBVIEW2 (GAME) ---
         private async void InitializeWebViewAsync()
         {
@@ -134,6 +144,7 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Lỗi khởi tạo WebView2: " + ex.Message);
             }
         }
+
         private void CalculateReps(double angle)
         {
             if (_peak == double.MinValue && _valley == double.MaxValue)
@@ -184,6 +195,7 @@ namespace AngleMonitorWPF
                 }
             }
         }
+
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             string jsonResult = e.TryGetWebMessageAsString();
@@ -207,6 +219,7 @@ namespace AngleMonitorWPF
                 if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
             }
         }
+
         private async Task<string> AutoFindBluetoothPortAsync()
         {
             return await Task.Run(() =>
@@ -214,19 +227,27 @@ namespace AngleMonitorWPF
                 string[] danhSachCong = SerialPort.GetPortNames();
                 foreach (string port in danhSachCong)
                 {
+                    // Bỏ qua cổng COM6 hoặc COM3 nếu đang cắm cáp nạp code để ưu tiên cổng Bluetooth ảo
                     try
                     {
                         using (SerialPort testPort = new SerialPort(port, 115200))
                         {
-                            testPort.ReadTimeout = 1500;
+                            testPort.ReadTimeout = 1000; // Giảm xuống 1s để quét nhanh hơn
                             testPort.Open();
 
-                            for (int i = 0; i < 3; i++)
+                            for (int i = 0; i < 5; i++)
                             {
-                                string data = testPort.ReadLine();
-                                if (data.Contains("Angle:"))
+                                string data = testPort.ReadLine().Trim();
+                                if (string.IsNullOrEmpty(data)) continue;
+
+                                // KIỂM TRA MỚI: Nếu chuỗi đổ về parse được thành số thực, chính là mạch MPU6050!
+                                if (double.TryParse(data, NumberStyles.Any, CultureInfo.InvariantCulture, out double testAngle))
                                 {
-                                    return port;
+                                    // Kiểm tra thêm điều kiện biên của góc khuỷu tay để chắc chắn
+                                    if (testAngle >= -180 && testAngle <= 180)
+                                    {
+                                        return port;
+                                    }
                                 }
                             }
                         }
@@ -266,7 +287,6 @@ namespace AngleMonitorWPF
                     AngleValues.Clear();
                     UpperThresholdValues.Clear();
                     LowerThresholdValues.Clear();
-                    ForceValues.Clear();
                     AxisMax = 10;
                     AxisMin = 0;
 
@@ -301,6 +321,7 @@ namespace AngleMonitorWPF
                 }
                 else
                 {
+                    // 1. NGẮT KẾT NỐI VÀ DỪNG THỜI GIAN
                     if (_serialPort != null && _serialPort.IsOpen)
                     {
                         _serialPort.Close();
@@ -313,6 +334,35 @@ namespace AngleMonitorWPF
                     _isConnected = false;
                     _stopwatchTimer.Stop();
 
+                    // 2. TÍNH TOÁN VÀ LƯU DỮ LIỆU VÀO DATABASE (PHẦN BỊ THIẾU)
+                    // 2. TÍNH TOÁN VÀ LƯU DỮ LIỆU VÀO DATABASE
+                    try
+                    {
+                        if (_currentSession != null && _currentSession.ChartData != null && _currentSession.ChartData.Count > 0)
+                        {
+                            // Tính toán các chỉ số
+                            double peakRom = _currentSession.ChartData.Max(d => d.Angle);
+                            double avgRom = _currentSession.ChartData.Average(d => d.Angle);
+
+                            // Đóng gói mảng thành JSON
+                            string chartDataJson = System.Text.Json.JsonSerializer.Serialize(_currentSession.ChartData);
+
+                            // Gọi luôn hàm thần thánh bạn đã viết sẵn!
+                            DatabaseHelper.SaveSessionData(
+                                _currentSession.SessionId,
+                                _repCount,
+                                Math.Round(peakRom, 1),
+                                Math.Round(avgRom, 1),
+                                chartDataJson
+                            );
+                        }
+                    }
+                    catch (Exception dbEx)
+                    {
+                        MessageBox.Show("Lỗi khi lưu phiên tập: " + dbEx.Message, "Lỗi DB", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+
+                    // 3. TRẢ LẠI TRẠNG THÁI GIAO DIỆN
                     btnStartStop.Content = "▶ Bắt đầu tập";
                     btnStartStop.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
                     txtStatus.Text = "● Đã ngắt kết nối";
@@ -326,28 +376,37 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Có lỗi xảy ra: " + ex.Message);
             }
         }
-
         private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             try
             {
-                string data = _serialPort.ReadLine().Trim();
-                if (data.StartsWith("Angle:", StringComparison.OrdinalIgnoreCase))
+                while (_serialPort.BytesToRead > 0)
                 {
-                    string numberOnly = data.Substring(6).Trim();
+                    string line = _serialPort.ReadLine().Trim();
+                    if (string.IsNullOrEmpty(line)) continue;
 
-                    if (double.TryParse(numberOnly, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double angle))
+                    // Đọc trực tiếp con số, không cần Split hay Regex
+                    if (double.TryParse(line, NumberStyles.Any, CultureInfo.InvariantCulture, out double rawAngle))
                     {
-                        if (_startTime == DateTime.MinValue) _startTime = DateTime.Now;
-                        double preciseTime = (DateTime.Now - _startTime).TotalSeconds;
+                        _smoothingBuffer.Enqueue(rawAngle);
+                        if (_smoothingBuffer.Count > SMOOTHING_WINDOW)
+                        {
+                            _smoothingBuffer.Dequeue();
+                        }
+                        double smoothedAngle = _smoothingBuffer.Average();
+                        double time = (DateTime.Now - _startTime).TotalSeconds;
 
-                        _dataQueue.Enqueue((angle, 0, preciseTime));
+                        // Chỉ lưu Góc và Thời gian
+                        _dataQueue.Enqueue((smoothedAngle, time));
+
+                        _tempAngle = smoothedAngle;
+                        _hasAngle = true;
                     }
                 }
             }
-            catch { }
+            catch { /* Bỏ qua nhiễu khung truyền */ }
         }
-        // TỐI ƯU 4: TỐI ƯU RENDER BIỂU ĐỒ VÀ WEBVIEW2 TRONG BỘ ĐỊNH THỜI 40MS
+
         private void ProcessQueueToUI(object sender, EventArgs e)
         {
             if (_dataQueue.IsEmpty) return;
@@ -355,15 +414,18 @@ namespace AngleMonitorWPF
             var newAngles = new List<ObservablePoint>();
             var newUppers = new List<ObservablePoint>();
             var newLowers = new List<ObservablePoint>();
-            var newForces = new List<ObservablePoint>();
+
+            // XÓA: var newForces = new List<ObservablePoint>();
 
             double latestAngle = 0;
             bool hasData = false;
+            int pointsProcessed = 0;
 
-            while (_dataQueue.TryDequeue(out var dataPoint))
+            while (pointsProcessed < 50 && _dataQueue.TryDequeue(out var dataPoint))
             {
                 hasData = true;
                 latestAngle = dataPoint.Angle;
+                pointsProcessed++;
 
                 CalculateReps(dataPoint.Angle);
 
@@ -372,12 +434,10 @@ namespace AngleMonitorWPF
                 {
                     double targetThresh = DeviceSettings.TargetThreshold;
                     double startRepThresh = DeviceSettings.MinAngleLimit + 10;
-                    double force = DeviceSettings.DumbbellWeight * Math.Abs(dataPoint.Accel) * 0.5;
-
                     newAngles.Add(new ObservablePoint(dataPoint.Time, dataPoint.Angle));
                     newUppers.Add(new ObservablePoint(dataPoint.Time, targetThresh));
                     newLowers.Add(new ObservablePoint(dataPoint.Time, startRepThresh));
-                    newForces.Add(new ObservablePoint(dataPoint.Time, force));
+
 
                     if (_currentSession != null)
                     {
@@ -395,27 +455,25 @@ namespace AngleMonitorWPF
                     AngleValues.AddRange(newAngles);
                     UpperThresholdValues.AddRange(newUppers);
                     LowerThresholdValues.AddRange(newLowers);
-                    ForceValues.AddRange(newForces);
-                    int overflowCount = AngleValues.Count - 500;
-                    if (overflowCount > 0)
+
+                    if (AngleValues.Count > 500)
                     {
+                        int overflowCount = AngleValues.Count - 500;
                         for (int i = 0; i < overflowCount; i++)
                         {
                             AngleValues.RemoveAt(0);
                             UpperThresholdValues.RemoveAt(0);
                             LowerThresholdValues.RemoveAt(0);
-                            ForceValues.RemoveAt(0);
                         }
                     }
                 }
-                if (webViewGame.Visibility == Visibility.Visible && webViewGame.CoreWebView2 != null)
-                {
-                    if (Math.Abs(latestAngle - _lastSentAngleToGame) > 0.5)
-                    {
-                        string angleString = latestAngle.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
-                        string script = $"if (typeof updateAngle === 'function') {{ updateAngle({angleString}); }}";
-                        webViewGame.CoreWebView2.ExecuteScriptAsync(script);
 
+                if (webViewGame != null && webViewGame.CoreWebView2 != null)
+                {
+                    if (Math.Abs(latestAngle - _lastSentAngleToGame) >= 0.5)
+                    {
+                        string angleString = latestAngle.ToString(CultureInfo.InvariantCulture);
+                        webViewGame.CoreWebView2.PostWebMessageAsString(angleString);
                         _lastSentAngleToGame = latestAngle;
                     }
                 }
@@ -431,6 +489,7 @@ namespace AngleMonitorWPF
                 }
             }
         }
+
         private async void btnPauseResumeGame_Click(object sender, RoutedEventArgs e)
         {
             if (webViewGame == null || webViewGame.CoreWebView2 == null) return;

@@ -14,7 +14,7 @@ namespace AngleMonitorWPF
     // DATABASE HELPER (Xử lý kết nối SQL)
     public static class DatabaseHelper
     {
-        private static readonly string connectionString = @"Server=DESKTOP-GUAOG8U;Database=RehabDB;Integrated Security=True;";
+        private static readonly string connectionString = @"Server=.;Database=RehabDB;Integrated Security=True;";
 
         public static SqlConnection GetConnection()
         {

@@ -9,7 +9,7 @@ namespace RehabTrack
     public partial class AddPatientWindow : Window
     {
         private const string ConnectionString =
-            @"Server=DESKTOP-GUAOG8U;Database=RehabDB;Integrated Security=True;";
+            @"Server=.;Database=RehabDB;Integrated Security=True;";
         private static readonly Random _random = new Random();
         public AddPatientWindow()
         {

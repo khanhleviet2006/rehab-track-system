@@ -48,7 +48,7 @@ namespace AngleMonitorWPF
 
             try
             {
-                using (SqlConnection conn = new SqlConnection(@"Server=DESKTOP-GUAOG8U;Database=RehabDB;Integrated Security=True;"))
+                using (SqlConnection conn = new SqlConnection(@"Server=.;Database=RehabDB;Integrated Security=True;"))
                 {
                     conn.Open();
                     string sql = @"

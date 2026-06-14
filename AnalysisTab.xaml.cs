@@ -119,12 +119,13 @@ namespace AngleMonitorWPF
                 MessageBox.Show("Lỗi tải lịch sử tập: " + ex.Message, "Lỗi Database", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-        // 2. TẢI ĐƯỜNG CONG BIỂU ĐỒ & TÍNH TOÁN HISTOGRAM (ASYNC)
         private async Task LoadChartDataForSessionAsync(SessionItem session)
         {
             try
             {
+                // 1. XÓA SẠCH DỮ LIỆU CẢ 2 BIỂU ĐỒ TRƯỚC KHI TẢI PHIÊN MỚI
                 AngleValues.Clear();
+                ResetRepDistribution();
 
                 if (session.ChartData != null && session.ChartData.Count > 0)
                 {
@@ -146,11 +147,15 @@ namespace AngleMonitorWPF
                         {
                             string jsonString = reader["ChartDataJson"].ToString();
 
-                            if (!string.IsNullOrEmpty(jsonString))
+                            // Kiểm tra kỹ JSON để tránh lỗi null hoặc mảng trống "[]"
+                            if (!string.IsNullOrEmpty(jsonString) && jsonString != "[]")
                             {
                                 var processedResult = await Task.Run(() =>
                                 {
-                                    var historyData = JsonSerializer.Deserialize<List<SessionDataPoint>>(jsonString);
+                                    // 2. BỎ QUA PHÂN BIỆT CHỮ HOA/CHỮ THƯỜNG TRONG JSON
+                                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                                    var historyData = JsonSerializer.Deserialize<List<SessionDataPoint>>(jsonString, options);
+
                                     var chartPoints = new List<ObservablePoint>();
                                     int[] bins = new int[5];
 
@@ -181,9 +186,11 @@ namespace AngleMonitorWPF
                                     }
                                     return new { Points = chartPoints, Bins = bins };
                                 });
-                                session.ChartData = processedResult.Points;
-                                AngleValues.AddRange(processedResult.Points);
 
+                                session.ChartData = processedResult.Points;
+
+                                // Đổ dữ liệu mới vào biểu đồ
+                                AngleValues.AddRange(processedResult.Points);
                                 for (int i = 0; i < 5; i++)
                                 {
                                     RepDistributionValues[i] = processedResult.Bins[i];
@@ -258,13 +265,29 @@ namespace AngleMonitorWPF
         // 3. XỬ LÝ XUẤT PDF QUA WEBVIEW2 VÀ MÃ HTML MẪU
         private string GetChartBase64(UIElement chartControl)
         {
+            // Ép LiveCharts vẽ ngay lập tức và tắt animation lúc chụp
+            if (chartControl is LiveCharts.Wpf.CartesianChart chart)
+            {
+                chart.DisableAnimations = true; // Tắt animation tạm thời
+                chart.Update(true, true);       // Ép tính toán và vẽ lại ngay lập tức
+            }
+
             chartControl.UpdateLayout();
+
+            // Kiểm tra kích thước để tránh lỗi RenderSize = 0
+            int width = Math.Max(1, (int)chartControl.RenderSize.Width);
+            int height = Math.Max(1, (int)chartControl.RenderSize.Height);
+
             RenderTargetBitmap rtb = new RenderTargetBitmap(
-                (int)chartControl.RenderSize.Width,
-                (int)chartControl.RenderSize.Height,
-                96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
 
             rtb.Render(chartControl);
+
+            // Bật lại animation cho UI
+            if (chartControl is LiveCharts.Wpf.CartesianChart c)
+            {
+                c.DisableAnimations = false;
+            }
 
             PngBitmapEncoder encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(rtb));
@@ -465,6 +488,10 @@ namespace AngleMonitorWPF
                             </div>
                         </div>
                     </div>
+                            <div class='charts-wrapper'>
+                        </div>
+
+                    {{DoctorNotes}}
                     <div class='footer'>
                         <div>© 2026 REHABTRACK CLINICAL SYSTEMS. HUST BME. COMPLIANT.</div>
                         <div>Privacy Policy • Terms of Service • Clinical Support</div>

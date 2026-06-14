@@ -1178,42 +1178,69 @@ class Game {
   }
 }
 
-/*API TOÀN CỤC  –  C# WPF gọi qua ExecuteScriptAsync */
+/*API TOÀN CỤC – Giao tiếp với C# WPF WebView2 */
 
+// 1. Cổng nhận dữ liệu Real-time (Tối ưu tốc độ cao)
+if (window.chrome && window.chrome.webview) {
+  window.chrome.webview.addEventListener('message', (event) => {
+    // Nhận chuỗi góc thô từ C# PostWebMessageAsString
+    if (window.gameInstance && !window.gameInstance.isPaused) {
+      window.gameInstance.receiveAngle(event.data);
+    }
+  });
+}
+
+// 2. Fallback (Dự phòng cho ExecuteScriptAsync nếu C# vẫn dùng)
 window.updateAngle = function(angle) {
   if (window.gameInstance) {
     window.gameInstance.receiveAngle(angle);
   }
 };
 
-function exportData() {
+window.exportData = function() {
   if (window.gameInstance) {
     window.gameInstance.exportData();
   }
-}
+};
+
 window.startGame = function() {
   if (window.gameInstance) {
     window.gameInstance.isPaused = false;
-    console.log("Game Resume/Start");
+    console.log("[JS] Game Resume/Start");
   }
 };
 
 window.pauseGame = function() {
   if (window.gameInstance) {
     window.gameInstance.isPaused = true;
-    console.log("Game Paused");
+    console.log("[JS] Game Paused");
   }
 };
+
+window.stopGame = function() {
+  if (window.gameInstance) {
+      window.gameInstance.isPaused = true;
+      window.gameInstance._triggerGameOver();
+      console.log("[JS] Game Stopped");
+  }
+}
 
 /*KHỞI ĐỘNG */
 window.addEventListener('DOMContentLoaded', () => {
   const loading = document.getElementById('loadingScreen');
 
   setTimeout(() => {
-    loading.classList.add('fade-out');
-    setTimeout(() => {
-      loading.style.display = 'none';
-      window.gameInstance = new Game();
-    }, 600);
-  }, 2000);
+    // Nếu bạn có class .fade-out trong CSS, nó sẽ chạy mượt mà
+    if(loading) {
+       loading.classList.add('fade-out');
+       setTimeout(() => {
+         loading.style.display = 'none';
+       }, 600);
+    }
+    
+    // Khởi tạo Game Instance (Mặc định ở trạng thái isPaused = true)
+    window.gameInstance = new Game();
+    
+    console.log("[JS] Game Engine Ready. Waiting for C# connection...");
+  }, 1000); // Giảm thời gian loading xuống 1s cho nhanh
 });
