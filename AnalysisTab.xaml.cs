@@ -47,8 +47,8 @@ namespace AngleMonitorWPF
             InitializeComponent();
             AngleValues = new ChartValues<ObservablePoint>();
             TimeFormatter = value => TimeSpan.FromSeconds(value).ToString(@"mm\:ss");
-            RepDistributionValues = new ChartValues<int> { 0, 0, 0, 0, 0 };
-            HistogramLabels = new[] { "0-30°", "30-60°", "60-90°", "90-120°", ">120°" };
+            RepDistributionValues = new ChartValues<int> { 0, 0, 0, 0, 0, 0, 0, 0 };
+            HistogramLabels = new[] { "0-20°", "20-40°", "40-60°", "60-80°", "80-100°", "100-120°", "120-140°", "140-150°" };
 
             DataContext = this;
             _sessions = new List<SessionItem>();
@@ -131,7 +131,7 @@ namespace AngleMonitorWPF
                 {
                     AngleValues.AddRange(session.ChartData);
                     var bins = await Task.Run(() => CalculateHistogram(session.ChartData));
-                    for (int i = 0; i < 5; i++) RepDistributionValues[i] = bins[i];
+                    for (int i = 0; i < 8; i++) RepDistributionValues[i] = bins[i];
                     return;
                 }
 
@@ -157,7 +157,7 @@ namespace AngleMonitorWPF
                                     var historyData = JsonSerializer.Deserialize<List<SessionDataPoint>>(jsonString, options);
 
                                     var chartPoints = new List<ObservablePoint>();
-                                    int[] bins = new int[5];
+                                    int[] bins = new int[8];
 
                                     if (historyData != null && historyData.Count > 0)
                                     {
@@ -175,11 +175,9 @@ namespace AngleMonitorWPF
 
                                             if (currY > prevY && currY >= nextY && currY > 15)
                                             {
-                                                if (currY <= 30) bins[0]++;
-                                                else if (currY <= 60) bins[1]++;
-                                                else if (currY <= 90) bins[2]++;
-                                                else if (currY <= 120) bins[3]++;
-                                                else bins[4]++;
+                                                int index = Math.Max(0, Math.Min(7, (int)(currY / 20.0)));
+                                                bins[index]++;
+
                                                 i += 5;
                                             }
                                         }
@@ -188,10 +186,8 @@ namespace AngleMonitorWPF
                                 });
 
                                 session.ChartData = processedResult.Points;
-
-                                // Đổ dữ liệu mới vào biểu đồ
                                 AngleValues.AddRange(processedResult.Points);
-                                for (int i = 0; i < 5; i++)
+                                for (int i = 0; i < 8; i++)
                                 {
                                     RepDistributionValues[i] = processedResult.Bins[i];
                                 }
@@ -207,7 +203,7 @@ namespace AngleMonitorWPF
         }
         private int[] CalculateHistogram(List<ObservablePoint> points)
         {
-            int[] bins = new int[5];
+            int[] bins = new int[8];
             for (int i = 1; i < points.Count - 1; i++)
             {
                 double prevY = points[i - 1].Y;
@@ -216,11 +212,9 @@ namespace AngleMonitorWPF
 
                 if (currY > prevY && currY >= nextY && currY > 15)
                 {
-                    if (currY <= 30) bins[0]++;
-                    else if (currY <= 60) bins[1]++;
-                    else if (currY <= 90) bins[2]++;
-                    else if (currY <= 120) bins[3]++;
-                    else bins[4]++;
+                    int index = Math.Max(0, Math.Min(7, (int)(currY / 20.0)));
+                    bins[index]++;
+
                     i += 5;
                 }
             }
@@ -228,13 +222,11 @@ namespace AngleMonitorWPF
         }
         private void ResetRepDistribution()
         {
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 8; i++)
             {
                 RepDistributionValues[i] = 0;
             }
         }
-
-        // SỰ KIỆN TƯƠNG TÁC GIAO DIỆN
         private void UpdateSessionUI(SessionItem s)
         {
             PeakRomValue.Text = s.PeakRom.ToString("F1");

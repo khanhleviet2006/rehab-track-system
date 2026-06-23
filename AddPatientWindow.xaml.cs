@@ -32,6 +32,7 @@ namespace RehabTrack
             try
             {
                 string patientCode = txtPatientID.Text.Trim();
+                string cccd = txtCCCD.Text.Trim(); // LẤY DỮ LIỆU CCCD
                 string fullName = txtFullName.Text.Trim();
                 int age = int.Parse(txtAge.Text.Trim());
                 string gender = ((ComboBoxItem)cboGender.SelectedItem).Content.ToString();
@@ -50,15 +51,17 @@ namespace RehabTrack
                 {
                     await conn.OpenAsync();
 
+                    // THÊM CỘT CCCD VÀO CÂU LỆNH INSERT
                     string sql = @"
                         INSERT INTO dbo.Users
-                            (PatientCode, FullName, Age, Gender, Height, Weight, Injury, CreatedAt)
+                            (PatientCode, CCCD, FullName, Age, Gender, Height, Weight, Injury, CreatedAt)
                         VALUES
-                            (@PatientCode, @FullName, @Age, @Gender, @Height, @Weight, @Injury, @CreatedAt)";
+                            (@PatientCode, @CCCD, @FullName, @Age, @Gender, @Height, @Weight, @Injury, @CreatedAt)";
 
                     using (var cmd = new SqlCommand(sql, conn))
                     {
                         cmd.Parameters.AddWithValue("@PatientCode", patientCode);
+                        cmd.Parameters.AddWithValue("@CCCD", cccd); // TRUYỀN THAM SỐ CCCD
                         cmd.Parameters.AddWithValue("@FullName", fullName);
                         cmd.Parameters.AddWithValue("@Age", age);
                         cmd.Parameters.AddWithValue("@Gender", gender);
@@ -138,6 +141,15 @@ namespace RehabTrack
         private void HideError()
         {
             txtError.Visibility = Visibility.Collapsed;
+        }
+        private bool IsDigitsOnly(string str)
+        {
+            foreach (char c in str)
+            {
+                if (c < '0' || c > '9')
+                    return false;
+            }
+            return true;
         }
     }
 }

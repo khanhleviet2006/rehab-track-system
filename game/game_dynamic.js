@@ -7,13 +7,13 @@ const CONFIG = {
   TARGET_ROM:        140,
   REP_HIGH_THRESH:   0.90,
   REP_LOW_THRESH:    0.20,
-  LERP_FACTOR:       0.10,
+  LERP_FACTOR:       0.35,
   MAX_HEALTH:        5,
   COIN_SPAWN_RATE:   90,
   ASTEROID_SPAWN_RATE: 150,
   BONUS_ANGLE_TOL:   8,
-  SCROLL_SPEED_BASE: 2.5,
-  SCROLL_SPEED_MAX:  6,
+  SCROLL_SPEED_BASE: 4.0,
+  SCROLL_SPEED_MAX:  8,
   PARALLAX_LAYERS:   3,
   STAR_COUNT:        200,
   NEBULA_COUNT:      5,
@@ -798,7 +798,7 @@ class Game {
     this._resize();
 
     this.state   = 'playing';
-    this.isPaused = true;     
+    this.isPaused = false;     
     
     this.frame   = 0;
     this.scrollMult = 1;
@@ -1183,7 +1183,6 @@ class Game {
 // 1. Cổng nhận dữ liệu Real-time (Tối ưu tốc độ cao)
 if (window.chrome && window.chrome.webview) {
   window.chrome.webview.addEventListener('message', (event) => {
-    // Nhận chuỗi góc thô từ C# PostWebMessageAsString
     if (window.gameInstance && !window.gameInstance.isPaused) {
       window.gameInstance.receiveAngle(event.data);
     }
@@ -1197,9 +1196,10 @@ window.updateAngle = function(angle) {
   }
 };
 
-window.exportData = function() {
+window.restartGame = function() {
   if (window.gameInstance) {
-    window.gameInstance.exportData();
+    window.gameInstance.restartGame();
+    console.log("[JS] Game Restarted");
   }
 };
 
@@ -1220,7 +1220,11 @@ window.pauseGame = function() {
 window.stopGame = function() {
   if (window.gameInstance) {
       window.gameInstance.isPaused = true;
-      window.gameInstance._triggerGameOver();
+      if (window.gameInstance.metrics.reps > 0) {
+          window.gameInstance._triggerGameOver();
+      } else {
+          console.log("[JS] Buổi tập chưa có Rep nào, hủy kết quả.");
+      }
       console.log("[JS] Game Stopped");
   }
 }

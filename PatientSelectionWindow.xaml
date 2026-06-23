@@ -162,7 +162,7 @@
                 <TextBlock Text="🔍" FontSize="14" VerticalAlignment="Center"
                            Margin="12,0,0,0" IsHitTestVisible="False"
                            Foreground="#A0AEC0"/>
-                <TextBlock Text="Tìm theo tên, MSBN, loại chấn thương..."
+                <TextBlock Text="Tìm theo tên, MSBN, CCCD, SĐT..."
                            VerticalAlignment="Center" Margin="40,0,0,0"
                            Foreground="#A0AEC0" FontSize="13" IsHitTestVisible="False"
                            x:Name="tbPlaceholder"/>
@@ -213,7 +213,16 @@
                         </DataGridTemplateColumn>
 
                         <DataGridTextColumn Header="Tuổi" Binding="{Binding Age}" Width="80"/>
-                        <DataGridTextColumn Header="MSBN" Binding="{Binding PatientCode}" Width="120"/>
+                        <DataGridTemplateColumn Header="MSBN / CCCD" Width="140">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding PatientCode}" Foreground="#1A202C" FontWeight="Medium"/>
+                                        <TextBlock Text="{Binding CCCD}" Foreground="#718096" FontSize="11" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Loại chấn thương" Binding="{Binding InjuryType}" Width="*"/>
                         <DataGridTextColumn Header="Bộ phận" Binding="{Binding BodyPart}" Width="100"/>
 

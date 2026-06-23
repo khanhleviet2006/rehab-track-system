@@ -52,7 +52,7 @@ namespace AngleMonitorWPF
         private bool isGamePaused = true;
         private ConcurrentQueue<(double Angle, double Time)> _dataQueue = new ConcurrentQueue<(double, double)>();
         private Queue<double> _smoothingBuffer = new Queue<double>();
-        private const int SMOOTHING_WINDOW = 10;
+        private const int SMOOTHING_WINDOW = 2;
         private int _sampleCounter = 0;
         private readonly int DOWN_SAMPLE_FACTOR = 3;
         private DispatcherTimer _uiUpdateTimer;
@@ -97,9 +97,8 @@ namespace AngleMonitorWPF
             LowerThresholdValues = new ChartValues<ObservablePoint>();
             TimeFormatter = value => value.ToString("0") + "s";
 
-            HistogramValues = new ChartValues<int> { 0, 0, 0, 0, 0, 0 };
-            HistogramLabels = new[] { "0-30°", "30-60°", "60-90°", "90-120°", "120-150°", "150-180°" };
-
+            HistogramValues = new ChartValues<int> { 0, 0, 0, 0, 0, 0, 0, 0 };
+            HistogramLabels = new[] { "0-20°", "20-40°", "40-60°", "60-80°", "80-100°", "100-120°", "120-140°", "140-150°" };
             AxisMax = 10;
             AxisMin = 0;
 
@@ -117,7 +116,7 @@ namespace AngleMonitorWPF
             };
 
             _uiUpdateTimer = new DispatcherTimer();
-            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(50);
+            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(16);
             _uiUpdateTimer.Tick += ProcessQueueToUI;
             _uiUpdateTimer.Start();
         }
@@ -185,7 +184,7 @@ namespace AngleMonitorWPF
                         });
 
                         _sessionMaxAngles.Add(_peak);
-                        int index = Math.Max(0, Math.Min(5, (int)(_peak / 30.0)));
+                        int index = Math.Max(0, Math.Min(7, (int)(_peak / 20.0)));
                         HistogramValues[index]++;
                     }
 
@@ -202,7 +201,7 @@ namespace AngleMonitorWPF
             MessageBox.Show("Bài tập Game đã hoàn thành!\nDữ liệu nhận được: " + jsonResult, "Thông báo hệ thống", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        private void Mode_Changed(object sender, RoutedEventArgs e)
+        private async void Mode_Changed(object sender, RoutedEventArgs e)
         {
             if (chartAngle == null || webViewGame == null) return;
 
@@ -211,12 +210,29 @@ namespace AngleMonitorWPF
                 chartAngle.Visibility = Visibility.Visible;
                 webViewGame.Visibility = Visibility.Collapsed;
                 if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
+
+                if (_isConnected && _stopwatchTimer != null && !_stopwatchTimer.IsEnabled)
+                {
+                    _stopwatchTimer.Start();
+                }
             }
             else if (rbGameMode.IsChecked == true)
             {
                 chartAngle.Visibility = Visibility.Collapsed;
                 webViewGame.Visibility = Visibility.Visible;
                 if (cboGameType != null) cboGameType.Visibility = Visibility.Collapsed;
+
+                if (_isConnected && webViewGame.CoreWebView2 != null)
+                {
+                    await webViewGame.CoreWebView2.ExecuteScriptAsync("window.startGame();");
+                    isGamePaused = false;
+
+                    if (btnPauseResumeGame != null)
+                    {
+                        btnPauseResumeGame.Content = "⏸ Tạm dừng Game";
+                        btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+                    }
+                }
             }
         }
 
@@ -227,12 +243,12 @@ namespace AngleMonitorWPF
                 string[] danhSachCong = SerialPort.GetPortNames();
                 foreach (string port in danhSachCong)
                 {
-                    // Bỏ qua cổng COM6 hoặc COM3 nếu đang cắm cáp nạp code để ưu tiên cổng Bluetooth ảo
+                    
                     try
                     {
                         using (SerialPort testPort = new SerialPort(port, 115200))
                         {
-                            testPort.ReadTimeout = 1000; // Giảm xuống 1s để quét nhanh hơn
+                            testPort.ReadTimeout = 1000; 
                             testPort.Open();
 
                             for (int i = 0; i < 5; i++)
@@ -240,10 +256,9 @@ namespace AngleMonitorWPF
                                 string data = testPort.ReadLine().Trim();
                                 if (string.IsNullOrEmpty(data)) continue;
 
-                                // KIỂM TRA MỚI: Nếu chuỗi đổ về parse được thành số thực, chính là mạch MPU6050!
+                                
                                 if (double.TryParse(data, NumberStyles.Any, CultureInfo.InvariantCulture, out double testAngle))
                                 {
-                                    // Kiểm tra thêm điều kiện biên của góc khuỷu tay để chắc chắn
                                     if (testAngle >= -180 && testAngle <= 180)
                                     {
                                         return port;
@@ -334,36 +349,42 @@ namespace AngleMonitorWPF
                     _isConnected = false;
                     _stopwatchTimer.Stop();
 
-                    // 2. TÍNH TOÁN VÀ LƯU DỮ LIỆU VÀO DATABASE (PHẦN BỊ THIẾU)
-                    // 2. TÍNH TOÁN VÀ LƯU DỮ LIỆU VÀO DATABASE
-                    try
+                    // --- BẮT ĐẦU PHẦN THÊM MỚI: CHẶN LƯU DỮ LIỆU RÁC ---
+                    if (_repCount == 0 || _elapsedTime.TotalSeconds < 5)
                     {
-                        if (_currentSession != null && _currentSession.ChartData != null && _currentSession.ChartData.Count > 0)
+                        // Nếu chưa tập được Rep nào, hoặc thời gian tập dưới 5 giây -> Không lưu
+                        MessageBox.Show("Buổi tập quá ngắn hoặc chưa hoàn thành lượt lặp (Rep) nào.\nHệ thống sẽ hủy kết quả này để không làm rác bệnh án.", "Đã hủy lưu kết quả", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+
+                        try
                         {
-                            // Tính toán các chỉ số
-                            double peakRom = _currentSession.ChartData.Max(d => d.Angle);
-                            double avgRom = _currentSession.ChartData.Average(d => d.Angle);
+                            if (_currentSession != null && _currentSession.ChartData != null && _currentSession.ChartData.Count > 0)
+                            {
 
-                            // Đóng gói mảng thành JSON
-                            string chartDataJson = System.Text.Json.JsonSerializer.Serialize(_currentSession.ChartData);
+                                double peakRom = _currentSession.ChartData.Max(d => d.Angle);
+                                double avgRom = _currentSession.ChartData.Average(d => d.Angle);
 
-                            // Gọi luôn hàm thần thánh bạn đã viết sẵn!
-                            DatabaseHelper.SaveSessionData(
-                                _currentSession.SessionId,
-                                _repCount,
-                                Math.Round(peakRom, 1),
-                                Math.Round(avgRom, 1),
-                                chartDataJson
-                            );
+
+                                string chartDataJson = System.Text.Json.JsonSerializer.Serialize(_currentSession.ChartData);
+
+                                DatabaseHelper.SaveSessionData(
+                                    _currentSession.SessionId,
+                                    _repCount,
+                                    Math.Round(peakRom, 1),
+                                    Math.Round(avgRom, 1),
+                                    chartDataJson
+                                );
+                            }
+                        }
+                        catch (Exception dbEx)
+                        {
+                            MessageBox.Show("Lỗi khi lưu phiên tập: " + dbEx.Message, "Lỗi DB", MessageBoxButton.OK, MessageBoxImage.Error);
                         }
                     }
-                    catch (Exception dbEx)
-                    {
-                        MessageBox.Show("Lỗi khi lưu phiên tập: " + dbEx.Message, "Lỗi DB", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
 
-                    // 3. TRẢ LẠI TRẠNG THÁI GIAO DIỆN
-                    btnStartStop.Content = "▶ Bắt đầu tập";
+                    btnStartStop.Content = "▶ Kết nối Bluetooth"; // Đổi lại text cho giống XAML gốc
                     btnStartStop.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
                     txtStatus.Text = "● Đã ngắt kết nối";
                     btnPauseResumeGame.Visibility = Visibility.Collapsed;
@@ -448,7 +469,16 @@ namespace AngleMonitorWPF
 
             if (hasData)
             {
-                txtAngle.Text = latestAngle.ToString("F1");
+                txtAngle.Text = latestAngle.ToString("F0");
+                if (webViewGame != null && webViewGame.CoreWebView2 != null)
+                {
+                    if (Math.Abs(latestAngle - _lastSentAngleToGame) >= 0.5)
+                    {
+                        string angleString = latestAngle.ToString(CultureInfo.InvariantCulture);
+                        webViewGame.CoreWebView2.PostWebMessageAsString(angleString);
+                        _lastSentAngleToGame = latestAngle;
+                    }
+                }
 
                 if (newAngles.Count > 0)
                 {
@@ -465,16 +495,6 @@ namespace AngleMonitorWPF
                             UpperThresholdValues.RemoveAt(0);
                             LowerThresholdValues.RemoveAt(0);
                         }
-                    }
-                }
-
-                if (webViewGame != null && webViewGame.CoreWebView2 != null)
-                {
-                    if (Math.Abs(latestAngle - _lastSentAngleToGame) >= 0.5)
-                    {
-                        string angleString = latestAngle.ToString(CultureInfo.InvariantCulture);
-                        webViewGame.CoreWebView2.PostWebMessageAsString(angleString);
-                        _lastSentAngleToGame = latestAngle;
                     }
                 }
             }
@@ -500,6 +520,10 @@ namespace AngleMonitorWPF
                 btnPauseResumeGame.Content = "▶ Tiếp tục Game";
                 btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981")); // Đổi màu xanh lá
                 isGamePaused = true;
+                if (_stopwatchTimer != null && _stopwatchTimer.IsEnabled)
+                {
+                    _stopwatchTimer.Stop();
+                }
             }
             else
             {
@@ -507,6 +531,12 @@ namespace AngleMonitorWPF
                 btnPauseResumeGame.Content = "⏸ Tạm dừng Game";
                 btnPauseResumeGame.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B")); // Đổi màu cam
                 isGamePaused = false;
+
+                // 2. THÊM MỚI: Kích hoạt bộ đếm giây tiếp tục chạy (nếu thiết bị vẫn đang kết nối)
+                if (_isConnected && _stopwatchTimer != null && !_stopwatchTimer.IsEnabled)
+                {
+                    _stopwatchTimer.Start();
+                }
             }
         }
 

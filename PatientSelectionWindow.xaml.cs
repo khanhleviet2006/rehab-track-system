@@ -16,6 +16,7 @@ namespace AngleMonitorWPF
     {
         public int Id { get; set; }
         public string MSBN { get; set; }
+        public string CCCD { get; set; }
         public string HoVaTen { get; set; }
         public int Tuoi { get; set; }
         public string LoaiChanThuong { get; set; } 
@@ -52,15 +53,16 @@ namespace AngleMonitorWPF
                 {
                     conn.Open();
                     string sql = @"
-    SELECT 
-        u.Id, 
-        u.PatientCode, 
-        u.FullName, 
-        u.Age, 
-        u.Injury,
-        (SELECT COUNT(*) FROM dbo.TrainingSessions ts WHERE ts.UserId = u.Id) AS SessionCount
-    FROM dbo.Users u 
-    ORDER BY u.CreatedAt DESC";
+                        SELECT 
+                        u.Id, 
+                        u.PatientCode, 
+                        u.CCCD, -- THÊM CỘT NÀY VÀO SELECT
+                        u.FullName, 
+                        u.Age, 
+                        u.Injury,
+                        (SELECT COUNT(*) FROM dbo.TrainingSessions ts WHERE ts.UserId = u.Id) AS SessionCount
+                        FROM dbo.Users u 
+                        ORDER BY u.CreatedAt DESC";
                     using (SqlCommand cmd = new SqlCommand(sql, conn))
                     using (SqlDataReader reader = cmd.ExecuteReader())
                     {
@@ -76,6 +78,7 @@ namespace AngleMonitorWPF
                             {
                                 Id = Convert.ToInt32(reader["Id"]),
                                 MSBN = reader["PatientCode"].ToString(),
+                                CCCD = reader["CCCD"] != DBNull.Value ? reader["CCCD"].ToString() : "", // GÁN GIÁ TRỊ CCCD
                                 HoVaTen = reader["FullName"].ToString(),
                                 Tuoi = reader["Age"] != DBNull.Value ? Convert.ToInt32(reader["Age"]) : 0,
                                 LoaiChanThuong = injury,
@@ -112,6 +115,7 @@ namespace AngleMonitorWPF
                 ? new List<Patient>(_allPatients)
                 : _allPatients.Where(p =>
                     p.MSBN.ToLower().Contains(q) ||
+                    (p.CCCD != null && p.CCCD.Contains(q)) ||
                     p.HoVaTen.ToLower().Contains(q) ||
                     p.LoaiChanThuong.ToLower().Contains(q) ||
                     p.KhopDieuTri.ToLower().Contains(q)).ToList();
@@ -131,6 +135,7 @@ namespace AngleMonitorWPF
                 FullName = p.HoVaTen,
                 Age = p.Tuoi,
                 PatientCode = p.MSBN,
+                CCCD = !string.IsNullOrEmpty(p.CCCD) ? p.CCCD : "Chưa có CCCD", 
                 InjuryType = p.LoaiChanThuong,
                 BodyPart = p.KhopDieuTri,
                 Status = string.IsNullOrWhiteSpace(p.TrangThai) ? "Active" : p.TrangThai,
