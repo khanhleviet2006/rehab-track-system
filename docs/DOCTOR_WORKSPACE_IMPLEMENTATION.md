@@ -1,5 +1,7 @@
 # Doctor Workspace — RehabTrack
 
+Bản đối chiếu với ZIP người dùng gửi và cập nhật luồng xuất PDF: [BAO_CAO_DOI_CHIEU_VA_NANG_CAP.md](BAO_CAO_DOI_CHIEU_VA_NANG_CAP.md). Build Windows tự động được cấu hình trong `.github/workflows/windows-validation.yml`; xem kết quả từng lần chạy tại Actions của PR.
+
 ## Tình trạng bàn giao
 
 Mã nguồn được sửa trực tiếp trong ứng dụng hiện có. Không tạo ứng dụng WPF thay thế, không đổi target framework và không thay giao thức cảm biến. Nhánh làm việc: `feature/doctor-workspace-rom`.

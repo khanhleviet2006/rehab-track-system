@@ -46,6 +46,8 @@ namespace AngleMonitorWPF
         private readonly DoctorSession _doctor;
         private List<RomMilestone> _romMilestones = new List<RomMilestone>();
         private int _selectedSessionId;
+        private bool _loadingSession;
+        private bool _exporting;
         private string _patientDisplay = "";
 
         public AnalysisTab() : this(GlobalData.CurrentUserId, null) { }
@@ -148,6 +150,7 @@ namespace AngleMonitorWPF
         }
         private async Task LoadChartDataForSessionAsync(SessionItem session)
         {
+            _loadingSession = true;
             try
             {
                 // 1. XÓA SẠCH DỮ LIỆU CẢ 2 BIỂU ĐỒ TRƯỚC KHI TẢI PHIÊN MỚI
@@ -228,6 +231,7 @@ namespace AngleMonitorWPF
             {
                 MessageBox.Show("Lỗi tải dữ liệu biểu đồ: " + ex.Message, "Lỗi Database", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            finally { _loadingSession = false; }
         }
         private int[] CalculateHistogram(List<ObservablePoint> points)
         {
@@ -284,10 +288,11 @@ namespace AngleMonitorWPF
             }
         }
         private async void OpenWorkspace_Click(object sender, RoutedEventArgs e)
-        { await DoctorWorkspaceWindow.OpenAsync(this, _patientId); await LoadRomComparisonAsync(); }
+        { if (_exporting) return; await DoctorWorkspaceWindow.OpenAsync(this, _patientId); await LoadRomComparisonAsync(); }
 
         private async void SessionItem_Click(object sender, RoutedEventArgs e)
         {
+            if (_exporting || _loadingSession) return;
             if (sender is Button btn && btn.Tag is SessionItem s)
             {
                 UpdateSessionUI(s);
@@ -391,6 +396,8 @@ namespace AngleMonitorWPF
 
         private async void ExportPDF_Click(object sender, RoutedEventArgs e)
         {
+            if (_exporting || _loadingSession) return;
+            _exporting = true;
             try
             {
                 if (_selectedSessionId <= 0) throw new InvalidOperationException("Chọn buổi tập trước khi xuất PDF.");
@@ -573,17 +580,18 @@ namespace AngleMonitorWPF
                         .Replace("height: 100%; box-sizing", "min-height: 260mm; box-sizing")
                         .Replace("position: absolute; bottom: 12mm; left: 15mm; right: 15mm;", "position: static; margin-top: 15mm;")
                         .Replace("</body>", romReport + "</body>");
-                    bool isLoaded = false;
+                    var navigation = new TaskCompletionSource<bool>();
                     EventHandler<CoreWebView2NavigationCompletedEventArgs> loadHandler = null;
-                    loadHandler = (s, args) =>
-                    {
-                        isLoaded = true;
-                        PdfWebView.CoreWebView2.NavigationCompleted -= loadHandler;
-                    };
+                    loadHandler = (s, args) => navigation.TrySetResult(args.IsSuccess);
                     PdfWebView.CoreWebView2.NavigationCompleted += loadHandler;
-                    PdfWebView.NavigateToString(finalHtmlToRender);
-
-                    while (!isLoaded) await Task.Delay(100);
+                    try
+                    {
+                        PdfWebView.NavigateToString(finalHtmlToRender);
+                        if (await Task.WhenAny(navigation.Task, Task.Delay(TimeSpan.FromSeconds(30))) != navigation.Task)
+                            throw new TimeoutException("Hết thời gian tải nội dung báo cáo. Vui lòng thử xuất lại.");
+                        if (!await navigation.Task) throw new InvalidOperationException("WebView2 không tải được nội dung báo cáo; chưa xuất PDF.");
+                    }
+                    finally { PdfWebView.CoreWebView2.NavigationCompleted -= loadHandler; }
                     await Task.Delay(500);
 
                     var printSettings = PdfWebView.CoreWebView2.Environment.CreatePrintSettings();
@@ -637,6 +645,7 @@ namespace AngleMonitorWPF
             {
                 MessageBox.Show("Lỗi hệ thống: " + ex.Message, "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            finally { _exporting = false; }
         }
     }
 }
