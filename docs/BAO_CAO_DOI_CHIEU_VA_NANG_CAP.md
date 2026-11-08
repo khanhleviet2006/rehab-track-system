@@ -14,7 +14,7 @@ Ngày cập nhật: 08/11/2026 (Asia/Bangkok).
 
 | Yêu cầu | Phần triển khai | Bằng chứng / giới hạn |
 |---|---|---|
-| Tích hợp WPF hiện có, tiếng Việt | DoctorWorkspaceWindow, DoctorLoginWindow, các nút điều hướng bệnh nhân/MainWindow | C# kiểm tra với net48; thao tác giao diện cần nghiệm thu Windows |
+| Tích hợp WPF hiện có, tiếng Việt | DoctorWorkspaceWindow, DoctorLoginWindow, các nút điều hướng bệnh nhân/MainWindow | Build WPF/BAML Windows đã thành công; thao tác giao diện vẫn cần nghiệm thu |
 | Quản lý bệnh nhân | Chọn/tải bệnh nhân, tái sử dụng form thêm, giữ tìm kiếm/tập luyện | ID bác sĩ riêng với ID bệnh nhân; tải SQL mới chạy ngoài UI thread |
 | Thiết lập mục tiêu theo bệnh nhân | PatientRomMilestones, thêm/sửa tiêu chí, revision và snapshot | Kiểm thử tạo/sửa/stale trên SQL đã chạy |
 | Phân biệt gập, duỗi và quy ước góc | FlexionDegrees, ExtensionDeficit, IncludedJointAngle; Unknown không tự đạt | Unit tests đã chạy; firmware/hiệu chuẩn chưa được xác minh |
@@ -38,7 +38,8 @@ Ngày cập nhật: 08/11/2026 (Asia/Bangkok).
 - Sau sửa báo cáo: chạy lại 31 kiểm thử nghiệp vụ, 31 pass / 0 fail. Lượt này SQL integration báo SKIP, không gộp thành kết quả SQL mới.
 - Kiểm tra XML/XAML, đường dẫn project, event handler, static resource và biên dịch tham chiếu C# với .NET Framework 4.8 thành công. Đây không phải build BAML.
 - Build test harness net48 thành công. Không chạy file exe net48 trên Linux.
-- Workflow Windows được bổ sung để kiểm tra build thực tế trên GitHub; kết quả nằm tại tab Actions của PR. Không coi việc thêm workflow là bằng chứng build thành công.
+- **Đã thực thi build WPF/BAML Release trên Windows 2022 thành công** tại commit `031c3104fd124d8928c849d32479c2e12fd629a9`. Build test harness net48 thành công (0 warning, 0 error); chạy .NET Framework thực tế: **31 pass, 0 fail**, SQL integration SKIP. [Workflow thành công](https://github.com/khanhleviet2006/rehab-track-system/actions/runs/42459637990).
+- Artifact: [RehabTrack-Windows-net48](https://github.com/khanhleviet2006/rehab-track-system/actions/runs/42459637990/artifacts/13609102869), khoảng 32 MB, lưu 7 ngày. Build app có cảnh báo từ các biến chưa dùng và using lặp trong MainWindow gốc; không có lỗi build. Artifact chưa chứng minh phần mềm chạy đúng với thiết bị thật.
 - Chưa nghiệm thu UI WPF, tắt/mở tiến trình ứng dụng thật, render/gộp PDF, PowerShell cấp tài khoản và Bluetooth trên máy Windows/thiết bị thật.
 
 ## Mở và chạy trên Windows

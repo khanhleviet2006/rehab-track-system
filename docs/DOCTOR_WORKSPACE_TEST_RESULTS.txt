@@ -82,3 +82,17 @@ NOT EXECUTED / NOT VERIFIED:
 - Bluetooth device, firmware conventions, calibration, game and timer regression on real hardware.
 - PDF rendering/merging/pagination via Windows WebView2 and PDFsharp.
 - Provision-Doctor.ps1 execution on Windows PowerShell.
+
+FOLLOW-UP WINDOWS VALIDATION (2026-11-08, 14:40 Asia/Bangkok):
+Commit: 031c3104fd124d8928c849d32479c2e12fd629a9
+Run: https://github.com/khanhleviet2006/rehab-track-system/actions/runs/42459637990
+Runner: windows-2022
+Restore original packages: success
+WPF application Release build including BAML: success (existing MainWindow warnings remain)
+Test harness net48 build: success, 0 warnings, 0 errors
+Actual .NET Framework business tests: 31 passed, 0 failed
+SQL integration: explicitly SKIP in this Windows run
+Artifact: RehabTrack-Windows-net48 (7-day retention)
+Earlier Linux build limitations above remain historical. Windows build is now verified;
+interactive WPF execution, actual process reopen, PDF rendering, PowerShell provisioning
+and real Bluetooth/device behavior remain unverified.

@@ -6,7 +6,7 @@ Bản đối chiếu với ZIP người dùng gửi và cập nhật luồng xu�
 
 Mã nguồn được sửa trực tiếp trong ứng dụng hiện có. Không tạo ứng dụng WPF thay thế, không đổi target framework và không thay giao thức cảm biến. Nhánh làm việc: `feature/doctor-workspace-rom`.
 
-Đã triển khai luồng UI → đánh giá ROM → xác thực bác sĩ → transaction SQL → tải lại checkbox, hủy xác nhận và lịch sử. Phần nghiệp vụ và lưu trữ được thực thi bằng kiểm thử với SQL Server 2022 tạm. Chưa chạy ứng dụng WPF, BAML, Bluetooth hoặc render PDF bằng WebView2 trên Windows; vì vậy chưa xác nhận toàn bộ tiêu chí nghiệm thu đầu cuối.
+Đã triển khai luồng UI → đánh giá ROM → xác thực bác sĩ → transaction SQL → tải lại checkbox, hủy xác nhận và lịch sử. Phần nghiệp vụ và lưu trữ được thực thi bằng kiểm thử với SQL Server 2022 tạm. Đã build WPF/BAML Release trên Windows 2022 và chạy 31 kiểm thử nghiệp vụ trên .NET Framework qua [GitHub Actions](https://github.com/khanhleviet2006/rehab-track-system/actions/runs/42459637990) tại commit `031c310`. Chưa chạy tương tác giao diện WPF, Bluetooth hoặc render PDF bằng WebView2 trên Windows; vì vậy chưa xác nhận toàn bộ tiêu chí nghiệm thu đầu cuối.
 
 ## Phân tích trước khi thay đổi
 
@@ -150,7 +150,7 @@ Các kiểm tra bổ sung đã thực thi:
 
 ## Việc cần nghiệm thu trên Windows
 
-- Build BAML/full solution bằng Visual Studio và chạy app thật; mở từ các nút điều hướng, kiểm tra binding, kích thước/scroll, chọn dòng/tích checkbox bằng chuột và bàn phím.
+- Build project WPF/BAML đã được CI Windows kiểm chứng. Cần mở toàn bộ solution bằng Visual Studio và chạy app thật; mở từ các nút điều hướng, kiểm tra binding, kích thước/scroll, chọn dòng/tích checkbox bằng chuột và bàn phím.
 - Dùng SQL Server triển khai: nhập lâm sàng → tích → lưu → tắt tiến trình WPF → mở lại → kiểm tra đúng bệnh nhân, bác sĩ, thời gian/ghi chú → hủy có lý do → mở lịch sử. Integration đã kiểm tra kết nối/repository mới; chưa thao tác tắt/mở tiến trình WPF thực tế.
 - Xuất/gộp PDF qua WebView2, kiểm tra phân trang bảng dài và dấu tiếng Việt; kiểm tra đường mục tiêu chỉ trên session có bằng chứng phù hợp. Bộ test mới kiểm tra HTML encoding, chưa render file PDF.
 - Kết nối thiết bị thật, xác minh quy ước góc, hiệu chuẩn, tần số mẫu và khả năng giữ. Không có firmware/thiết bị trong môi trường này. Không coi dữ liệu cũ mặc định là đã xác minh. Kiểm tra hồi quy Bluetooth, game, timer, reps và lưu session thực tế.
@@ -183,3 +183,7 @@ Sửa:
 - `README.md`: sửa framework/DB và nối hướng dẫn chạy.
 
 Giữ nguyên `App.xaml`, `App.xaml.cs`, `AuthWindow`, `RehabSession`, `DataOptimizer`, `DeviceSettings`, `create_tables.sql`, `packages.config` và mã game/giao thức cảm biến.
+
+## Cập nhật kiểm chứng Windows sau đối chiếu ZIP
+
+Workflow Windows tại commit `031c310` đã thành công: restore package gốc, build WPF/BAML Release, build test harness net48, chạy 31 kiểm thử nghiệp vụ trên .NET Framework và upload artifact. SQL integration trong CI báo SKIP; kết quả 30 ca SQL vẫn là lần chạy SQL Server 2022 trước đó. Các lỗi build Linux ghi ở trên là lịch sử kiểm tra môi trường, không phải kết quả build Windows hiện tại. Xem báo cáo đối chiếu ZIP để tải artifact và các bước nghiệm thu tương tác còn lại.
