@@ -57,6 +57,31 @@
             </Setter>
         </Style>
 
+        <Style x:Key="DoctorButton" TargetType="Button">
+            <Setter Property="Background" Value="#E8F5F0"/>
+            <Setter Property="Foreground" Value="#176B52"/>
+            <Setter Property="BorderBrush" Value="#1D9E75"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="14,9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#D4EFE5"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.5"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -168,10 +193,13 @@
                            x:Name="tbPlaceholder"/>
             </Grid>
 
-            <Button Grid.Column="1" Content="+ Hồ sơ mới"
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <Button Content="Không gian bác sĩ" Click="BtnDoctorWorkspace_Click" Style="{StaticResource DoctorButton}" Margin="12,0,0,0"/>
+            <Button Content="+ Hồ sơ mới"
                     Style="{StaticResource PrimaryButton}"
                     Margin="12,0,0,0"
                     Click="BtnNewPatient_Click"/>
+            </StackPanel>
         </Grid>
 
         <TextBlock x:Name="tbPatientCount" Grid.Row="1"
@@ -228,7 +256,14 @@
 
                         <DataGridTextColumn Header="Buổi tập" Binding="{Binding SessionCount, StringFormat='{}{0} buổi tập'}" Width="120"/>
 
-                        <DataGridTemplateColumn Header="Thao tác" Width="80">
+                        <DataGridTemplateColumn Header="Hồ sơ ROM" Width="125">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Bác sĩ / ROM" Click="BtnDoctorWorkspace_Click" Style="{StaticResource DoctorButton}" Padding="8,5"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Tập luyện" Width="80">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="#A0AEC0"

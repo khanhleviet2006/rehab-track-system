@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <OutputType>Exe</OutputType>
+  <FrameworkTests Condition="'$(FrameworkTests)' == '' And '$(OS)' == 'Windows_NT'">true</FrameworkTests>
+  <TargetFramework Condition="'$(FrameworkTests)' != 'true'">net8.0</TargetFramework>
+  <TargetFramework Condition="'$(FrameworkTests)' == 'true'">net48</TargetFramework>
+  <LangVersion>7.3</LangVersion>
+  <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  <NoWarn>SYSLIB0041</NoWarn>
+ </PropertyGroup>
+ <ItemGroup>
+  <Compile Include="..\Rom\*.cs" Link="Rom\%(Filename)%(Extension)"/>
+  <Compile Include="Program.cs"/>
+  <PackageReference Include="System.Data.SqlClient" Version="4.9.1"/>
+  <PackageReference Include="System.Text.Json" Version="8.0.5"/>
+ </ItemGroup>
+ <ItemGroup Condition="'$(FrameworkTests)' == 'true'">
+  <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All"/>
+  <Reference Include="System.Data"/><Reference Include="System.Net.Http"/>
+ </ItemGroup>
+</Project>

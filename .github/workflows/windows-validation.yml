@@ -1,0 +1,44 @@
+name: Windows WPF validation
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore original application packages
+        run: nuget restore packages.config -PackagesDirectory packages -NonInteractive
+      - name: Build WPF application including BAML
+        run: msbuild AngleMonitorWPF.csproj /t:Rebuild /p:Configuration=Release /verbosity:minimal
+      - name: Build net48 test harness
+        run: dotnet build tests/RehabTrack.Rom.Tests.csproj -p:FrameworkTests=true -c Release
+      - name: Run business tests on .NET Framework
+        shell: pwsh
+        run: |
+          & .\tests\bin\Release\net48\RehabTrack.Rom.Tests.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Render WPF previews with illustrative data
+        shell: powershell
+        run: powershell.exe -NoProfile -STA -File tools/Preview-Workspace.ps1
+      - name: Upload WPF previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: DoctorWorkspace-Preview
+          path: preview/*.png
+          retention-days: 7
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: RehabTrack-Windows-net48
+          path: bin/Release/
+          retention-days: 7

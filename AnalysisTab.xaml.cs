@@ -15,6 +15,7 @@ using System.Linq;
 using System.Windows.Media;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
+using AngleMonitorWPF.Rom;
 
 namespace AngleMonitorWPF
 {
@@ -41,9 +42,18 @@ namespace AngleMonitorWPF
 
         private List<SessionItem> _sessions;
         private string _currentSessionDate = "";
+        private readonly int _patientId;
+        private readonly DoctorSession _doctor;
+        private List<RomMilestone> _romMilestones = new List<RomMilestone>();
+        private int _selectedSessionId;
+        private bool _loadingSession;
+        private bool _exporting;
+        private string _patientDisplay = "";
 
-        public AnalysisTab()
+        public AnalysisTab() : this(GlobalData.CurrentUserId, null) { }
+        public AnalysisTab(int patientId, DoctorSession doctor)
         {
+            _patientId = patientId; _doctor = doctor;
             InitializeComponent();
             AngleValues = new ChartValues<ObservablePoint>();
             TimeFormatter = value => TimeSpan.FromSeconds(value).ToString(@"mm\:ss");
@@ -58,7 +68,25 @@ namespace AngleMonitorWPF
 
         private async void AnalysisTab_Loaded(object sender, RoutedEventArgs e)
         {
+            await LoadRomComparisonAsync();
             await LoadSessionsFromDatabaseAsync();
+        }
+        private async Task LoadRomComparisonAsync()
+        {
+            try
+            {
+                _patientDisplay = await Task.Run(() =>
+                {
+                    using (var c = DatabaseHelper.GetConnection())
+                    using (var cmd = new SqlCommand("SELECT PatientCode+N' — '+FullName FROM dbo.Users WHERE Id=@p", c))
+                    { c.Open(); cmd.Parameters.AddWithValue("@p", _patientId); return cmd.ExecuteScalar()?.ToString() ?? "Không tìm thấy bệnh nhân"; }
+                });
+                if (_doctor != null)
+                    _romMilestones = await Task.Run(() => new DoctorWorkspaceRepository(DatabaseHelper.GetConnection).Milestones(_patientId, _doctor));
+                RomComparison.Text = _doctor == null ? "Mở Không gian bác sĩ để xem mốc ROM và xác nhận đã lưu." :
+                    string.Join(" • ", _romMilestones.Select(m => "#" + m.MilestoneId + " " + m.MovementLabel + " " + m.TargetAngle + "°: " + m.StatusLabel));
+            }
+            catch (Exception ex) { RomComparison.Text = "Chưa tải được mốc ROM: " + ex.Message; }
         }
         // 1. TẢI DANH SÁCH BUỔI TẬP (ASYNC)
         private async Task LoadSessionsFromDatabaseAsync()
@@ -73,7 +101,7 @@ namespace AngleMonitorWPF
 
                 using (SqlCommand cmd = new SqlCommand(query))
                 {
-                    cmd.Parameters.AddWithValue("@pID", GlobalData.CurrentUserId);
+                    cmd.Parameters.AddWithValue("@pID", _patientId);
 
                     using (SqlDataReader reader = await DatabaseHelper.ExecuteReaderAsync(cmd))
                     {
@@ -81,6 +109,7 @@ namespace AngleMonitorWPF
 
                         while (reader != null && await reader.ReadAsync())
                         {
+                            if (reader["StartTime"] == DBNull.Value) continue;
                             DateTime startTime = Convert.ToDateTime(reader["StartTime"]);
                             DateTime? endTime = reader["EndTime"] != DBNull.Value ? Convert.ToDateTime(reader["EndTime"]) : (DateTime?)null;
 
@@ -95,9 +124,9 @@ namespace AngleMonitorWPF
                                 SessionId = Convert.ToInt32(reader["SessionId"]),
                                 Date = startTime.ToString("yyyy-MM-dd HH:mm"),
                                 Label = "Session #" + sessionNumber++,
-                                PeakRom = Convert.ToDouble(reader["PeakROM"]),
-                                AvgRom = Convert.ToDouble(reader["AvgROM"]),
-                                Reps = Convert.ToInt32(reader["TotalReps"]),
+                                PeakRom = reader["PeakROM"] == DBNull.Value ? 0 : Convert.ToDouble(reader["PeakROM"]),
+                                AvgRom = reader["AvgROM"] == DBNull.Value ? 0 : Convert.ToDouble(reader["AvgROM"]),
+                                Reps = reader["TotalReps"] == DBNull.Value ? 0 : Convert.ToInt32(reader["TotalReps"]),
                                 Duration = durationMinutes,
                                 PeakChange = "Hoàn thành",
                                 ChartData = null
@@ -121,6 +150,7 @@ namespace AngleMonitorWPF
         }
         private async Task LoadChartDataForSessionAsync(SessionItem session)
         {
+            _loadingSession = true;
             try
             {
                 // 1. XÓA SẠCH DỮ LIỆU CẢ 2 BIỂU ĐỒ TRƯỚC KHI TẢI PHIÊN MỚI
@@ -135,11 +165,12 @@ namespace AngleMonitorWPF
                     return;
                 }
 
-                string query = "SELECT ChartDataJson FROM dbo.TrainingSessions WHERE SessionId = @sid";
+                string query = "SELECT ChartDataJson FROM dbo.TrainingSessions WHERE SessionId = @sid AND UserId=@patient";
 
                 using (SqlCommand cmd = new SqlCommand(query))
                 {
                     cmd.Parameters.AddWithValue("@sid", session.SessionId);
+                    cmd.Parameters.AddWithValue("@patient", _patientId);
 
                     using (SqlDataReader reader = await DatabaseHelper.ExecuteReaderAsync(cmd))
                     {
@@ -200,6 +231,7 @@ namespace AngleMonitorWPF
             {
                 MessageBox.Show("Lỗi tải dữ liệu biểu đồ: " + ex.Message, "Lỗi Database", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            finally { _loadingSession = false; }
         }
         private int[] CalculateHistogram(List<ObservablePoint> points)
         {
@@ -229,6 +261,16 @@ namespace AngleMonitorWPF
         }
         private void UpdateSessionUI(SessionItem s)
         {
+            _selectedSessionId = s.SessionId;
+            // Only compare a trace with targets whose evidence explicitly refers to this
+            // session. Unclassified legacy traces do not receive clinical target overlays.
+            if (MyChart.AxisY.Count > 0)
+            {
+                MyChart.AxisY[0].Sections = new LiveCharts.Wpf.SectionsCollection();
+                var comparable = _romMilestones.Where(m => m.SessionId == s.SessionId && m.OriginalConfirmed).ToList();
+                if (comparable.Select(m => m.MeasurementConvention).Distinct().Count() == 1 && comparable.Select(m => m.MovementType).Distinct().Count() == 1)
+                    foreach (var m in comparable) MyChart.AxisY[0].Sections.Add(new LiveCharts.Wpf.AxisSection { Value=m.TargetAngle, Stroke=Brushes.SeaGreen, StrokeThickness=2 });
+            }
             PeakRomValue.Text = s.PeakRom.ToString("F1");
             AvgRomValue.Text = s.AvgRom.ToString("F1");
             RepsValue.Text = s.Reps.ToString();
@@ -238,16 +280,19 @@ namespace AngleMonitorWPF
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             {
-                _currentSessionDate = dt.ToString("MMM dd, yyyy");
+                _currentSessionDate = dt.ToString("yyyy-MM-dd HH:mm");
             }
             else
             {
                 _currentSessionDate = s.Date;
             }
         }
+        private async void OpenWorkspace_Click(object sender, RoutedEventArgs e)
+        { if (_exporting) return; await DoctorWorkspaceWindow.OpenAsync(this, _patientId); await LoadRomComparisonAsync(); }
 
         private async void SessionItem_Click(object sender, RoutedEventArgs e)
         {
+            if (_exporting || _loadingSession) return;
             if (sender is Button btn && btn.Tag is SessionItem s)
             {
                 UpdateSessionUI(s);
@@ -297,7 +342,7 @@ namespace AngleMonitorWPF
             {
                 Width = 450,
                 Height = 320,
-                Title = "Thêm ghi chú bác sĩ",
+                Title = "Thêm ghi chú báo cáo",
                 WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 ResizeMode = ResizeMode.NoResize,
                 Background = new SolidColorBrush(Colors.White)
@@ -325,7 +370,7 @@ namespace AngleMonitorWPF
 
             Button btnConfirm = new Button()
             {
-                Content = "Xác nhận & Xuất PDF",
+                Content = "Tiếp tục xuất PDF",
                 Width = 140,
                 Height = 35,
                 Margin = new Thickness(0, 15, 0, 0),
@@ -351,8 +396,18 @@ namespace AngleMonitorWPF
 
         private async void ExportPDF_Click(object sender, RoutedEventArgs e)
         {
+            if (_exporting || _loadingSession) return;
+            _exporting = true;
             try
             {
+                if (_selectedSessionId <= 0) throw new InvalidOperationException("Chọn buổi tập trước khi xuất PDF.");
+                string romReport;
+                if (_doctor != null)
+                {
+                    _romMilestones = await Task.Run(() => new DoctorWorkspaceRepository(DatabaseHelper.GetConnection).Milestones(_patientId, _doctor));
+                    romReport = RomReportBuilder.Build(_patientId, _romMilestones);
+                }
+                else romReport = "<p style='padding:15mm'>Chưa tải xác nhận bác sĩ. Mở báo cáo từ Không gian bác sĩ để bổ sung bảng mốc ROM đã xác nhận.</p>";
                 string doctorNotes = PromptForDoctorNotes();
                 SaveFileDialog saveFileDialog = new SaveFileDialog();
                 saveFileDialog.Filter = "PDF Document|*.pdf";
@@ -369,7 +424,7 @@ namespace AngleMonitorWPF
                     string barChartBase64 = GetChartBase64(MyBarChart);
                     string noteHtml = string.IsNullOrWhiteSpace(doctorNotes)
                         ? ""
-                        : $"<div class='doctor-notes'><strong>Nhận xét:</strong> {doctorNotes.Replace("\r\n", "<br/>").Replace("\n", "<br/>")}</div>";
+                        : $"<div class='doctor-notes'><strong>Ghi chú bổ sung (không phải xác nhận mốc):</strong> {RomReportBuilder.Encode(doctorNotes).Replace("\r\n", "<br/>").Replace("\n", "<br/>")}</div>";
 
                     string htmlContent = @"
             <!DOCTYPE html>
@@ -423,7 +478,7 @@ namespace AngleMonitorWPF
                         <div class='info-group'>
                             <div class='info-label'>Thông tin bệnh nhân</div>
                             <div class='info-value'>Bệnh nhân hiện tại</div>
-                            <div class='info-sub'>ID: RT-2026-{{SessionDateShort}}</div>
+                            <div class='info-sub'>ID: {{PatientId}}</div>
                         </div>
                         <div class='info-group'>
                             <div class='info-label'>Phiên tập</div>
@@ -494,6 +549,7 @@ namespace AngleMonitorWPF
                     System.Text.StringBuilder htmlBuilder = new System.Text.StringBuilder(htmlContent);
 
                     htmlBuilder.Replace("{{DateToday}}", DateTime.Now.ToString("dd/MM/yyyy"));
+                    htmlBuilder.Replace("{{PatientId}}", _patientId.ToString());
                     htmlBuilder.Replace("{{SessionDateShort}}", DateTime.Now.ToString("MMdd"));
 
                     string displayDate = _currentSessionDate;
@@ -513,18 +569,29 @@ namespace AngleMonitorWPF
                     htmlBuilder.Replace("{{ChartImage}}", chartBase64);
                     htmlBuilder.Replace("{{BarChartImage}}", barChartBase64);
                     htmlBuilder.Replace("{{DoctorNotes}}", noteHtml);
-                    string finalHtmlToRender = htmlBuilder.ToString();
-                    bool isLoaded = false;
+                    string finalHtmlToRender = htmlBuilder.ToString()
+                        .Replace("Bệnh nhân hiện tại", RomReportBuilder.Encode(_patientDisplay))
+                        .Replace("Buổi tập hiện tại", "Buổi #" + _selectedSessionId)
+                        .Replace("Loại điều trị: Hậu phẫu khớp khuỷu", "Theo hồ sơ bệnh nhân")
+                        .Replace("✓ Đã hoàn thành | Target: 115°", "Góc ghi nhận • xem xác nhận bác sĩ")
+                        .Replace("↘ Dưới mục tiêu", "Chưa phân loại vận động / quy ước góc")
+                        .Replace("✓ Full Extension", "Số lần lặp do hệ thống đếm")
+                        .Replace("height: 297mm; overflow: hidden;", "min-height: 297mm;")
+                        .Replace("height: 100%; box-sizing", "min-height: 260mm; box-sizing")
+                        .Replace("position: absolute; bottom: 12mm; left: 15mm; right: 15mm;", "position: static; margin-top: 15mm;")
+                        .Replace("</body>", romReport + "</body>");
+                    var navigation = new TaskCompletionSource<bool>();
                     EventHandler<CoreWebView2NavigationCompletedEventArgs> loadHandler = null;
-                    loadHandler = (s, args) =>
-                    {
-                        isLoaded = true;
-                        PdfWebView.CoreWebView2.NavigationCompleted -= loadHandler;
-                    };
+                    loadHandler = (s, args) => navigation.TrySetResult(args.IsSuccess);
                     PdfWebView.CoreWebView2.NavigationCompleted += loadHandler;
-                    PdfWebView.NavigateToString(finalHtmlToRender);
-
-                    while (!isLoaded) await Task.Delay(100);
+                    try
+                    {
+                        PdfWebView.NavigateToString(finalHtmlToRender);
+                        if (await Task.WhenAny(navigation.Task, Task.Delay(TimeSpan.FromSeconds(30))) != navigation.Task)
+                            throw new TimeoutException("Hết thời gian tải nội dung báo cáo. Vui lòng thử xuất lại.");
+                        if (!await navigation.Task) throw new InvalidOperationException("WebView2 không tải được nội dung báo cáo; chưa xuất PDF.");
+                    }
+                    finally { PdfWebView.CoreWebView2.NavigationCompleted -= loadHandler; }
                     await Task.Delay(500);
 
                     var printSettings = PdfWebView.CoreWebView2.Environment.CreatePrintSettings();
@@ -578,6 +645,7 @@ namespace AngleMonitorWPF
             {
                 MessageBox.Show("Lỗi hệ thống: " + ex.Message, "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            finally { _exporting = false; }
         }
     }
 }

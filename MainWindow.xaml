@@ -111,6 +111,7 @@
                     </Button>
                     <TextBlock Text="Mở cửa sổ đánh giá chi tiết" FontSize="10" Foreground="#9CA3AF" Margin="0,0,0,10" HorizontalAlignment="Center"/>
 
+                    <Button Content="KHÔNG GIAN BÁC SĨ / ROM" Click="OpenDoctorWorkspace_Click" Height="32" Background="#E8F5F0" Foreground="#176B52" BorderBrush="#1D9E75" FontFamily="Segoe UI" FontWeight="SemiBold" Cursor="Hand"/>
                     <Separator Margin="0,0,0,8"/>
                 </StackPanel>
             </Border>

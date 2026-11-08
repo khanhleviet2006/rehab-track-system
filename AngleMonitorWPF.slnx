@@ -5,4 +5,5 @@
     <File Path="style.css" />
   </Folder>
   <Project Path="AngleMonitorWPF.csproj" Id="c36cdd41-4d1b-4ad2-848c-01c5bc9ad24f" />
+  <Project Path="tests/RehabTrack.Rom.Tests.csproj" />
 </Solution>

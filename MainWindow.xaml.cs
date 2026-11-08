@@ -561,6 +561,10 @@ namespace AngleMonitorWPF
             AnalysisTab tab = new AnalysisTab();
             tab.ShowDialog();
         }
+        private async void OpenDoctorWorkspace_Click(object sender, RoutedEventArgs e)
+        {
+            await DoctorWorkspaceWindow.OpenAsync(this, GlobalData.CurrentUserId);
+        }
 
         private void LoadChartData(DateTime startDate, DateTime endDate)
         {

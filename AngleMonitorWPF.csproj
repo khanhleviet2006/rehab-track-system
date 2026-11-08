@@ -130,6 +130,8 @@
       <HintPath>packages\SkiaSharp.Views.WPF.3.119.0\lib\net462\SkiaSharp.Views.WPF.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="netstandard" />
     <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
     </Reference>
@@ -183,6 +185,16 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="DataOptimizer.cs" />
+    <Compile Include="Rom\RomModels.cs" />
+    <Compile Include="Rom\RomMilestoneService.cs" />
+    <Compile Include="Rom\PasswordHasher.cs" />
+    <Compile Include="Rom\DoctorRepository.cs" />
+    <Compile Include="Rom\DoctorWorkspaceRepository.cs" />
+    <Compile Include="Rom\RomReportBuilder.cs" />
+    <Compile Include="DoctorWorkspaceWindow.xaml.cs"><DependentUpon>DoctorWorkspaceWindow.xaml</DependentUpon></Compile>
+    <Compile Include="DoctorLoginWindow.xaml.cs"><DependentUpon>DoctorLoginWindow.xaml</DependentUpon></Compile>
+    <Page Include="DoctorWorkspaceWindow.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
+    <Page Include="DoctorLoginWindow.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <Compile Include="RehabSession.cs" />
     <Compile Include="DeviceSettings.cs" />
     <Compile Include="AnalysisTab.xaml.cs">
@@ -261,6 +273,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="migrations\001_doctor_workspace.sql" />
+    <None Include="docs\DOCTOR_WORKSPACE_IMPLEMENTATION.md" />
+    <None Include="docs\DOCTOR_WORKSPACE_TEST_RESULTS.txt" />
+    <None Include="tools\Provision-Doctor.ps1" />
+    <None Include="tools\validate_wpf_sources.py" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="tải-xuống-_1_.ico" />

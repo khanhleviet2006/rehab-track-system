@@ -8,8 +8,6 @@ namespace RehabTrack
 {
     public partial class AddPatientWindow : Window
     {
-        private const string ConnectionString =
-            @"Server=.;Database=RehabDB;Integrated Security=True;";
         private static readonly Random _random = new Random();
         public AddPatientWindow()
         {
@@ -47,7 +45,7 @@ namespace RehabTrack
                 double? weight = string.IsNullOrEmpty(txtWeight.Text) ? (double?)null
                                  : double.Parse(txtWeight.Text.Trim());
 
-                using (var conn = new SqlConnection(ConnectionString))
+                using (var conn = AngleMonitorWPF.DatabaseHelper.GetConnection())
                 {
                     await conn.OpenAsync();
 
