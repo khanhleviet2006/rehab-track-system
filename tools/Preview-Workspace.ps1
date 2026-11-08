@@ -3,7 +3,7 @@
 param([string]$OutputDirectory = 'preview')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml
-[System.Windows.Interop.RenderOptions]::ProcessRenderMode = [System.Windows.Interop.RenderMode]::SoftwareOnly
+[System.Windows.Media.RenderOptions]::ProcessRenderMode = [System.Windows.Interop.RenderMode]::SoftwareOnly
 $root = Split-Path $PSScriptRoot -Parent
 $bin = Join-Path $root 'bin/Release'
 foreach ($dll in @('LiveCharts.dll','LiveCharts.Wpf.dll','AngleMonitorWPF.exe')) {
