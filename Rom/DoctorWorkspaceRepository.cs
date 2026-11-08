@@ -72,7 +72,7 @@ namespace AngleMonitorWPF.Rom
         private static List<RomMilestone> ReadMilestones(SqlConnection c, SqlTransaction tx, int patientId)
         {
             string sql = @"SELECT m.*,a.AssessmentId,a.SessionId,a.MeasuredAngle,a.MeasurementTime,a.MeasurementSource,
-                a.AssessmentStatus,a.Notes AS AssessmentNotes,rc.ConfirmationId,rc.ConfirmedAt,rc.Notes AS ConfirmationNotes,d.FullName AS DoctorName
+                a.AssessmentStatus,a.Notes AS AssessmentNotes,rc.ConfirmationId,rc.ConfirmedAt,rc.Notes AS ConfirmationNotes,d.FullName AS DoctorName,d.Username AS DoctorUsername
                 FROM dbo.PatientRomMilestones m " + (tx == null ? "" : "WITH(UPDLOCK,HOLDLOCK) ") + @"
                 OUTER APPLY(SELECT TOP(1) * FROM dbo.RomConfirmations r WHERE r.MilestoneId=m.MilestoneId AND r.IsCurrent=1) rc
                 OUTER APPLY(SELECT TOP(1) * FROM dbo.RomAssessments x WHERE x.MilestoneId=m.MilestoneId AND x.MilestoneRevision=m.Revision
@@ -96,7 +96,8 @@ namespace AngleMonitorWPF.Rom
                         MeasuredAngle = NullableValue<double>(r, "MeasuredAngle"), MeasurementTime = NullableValue<DateTime>(r, "MeasurementTime"),
                         MeasurementSource = r["MeasurementSource"].ToString(), AssessmentState = r["AssessmentStatus"].ToString(),
                         ConfirmationId = NullableValue<int>(r, "ConfirmationId"), ConfirmedAt = NullableValue<DateTime>(r, "ConfirmedAt"),
-                        DoctorName = r["DoctorName"].ToString(), Notes = r["AssessmentNotes"].ToString() + " " + r["ConfirmationNotes"].ToString()
+                        DoctorName = r["DoctorName"].ToString(), DoctorUsername = r["DoctorUsername"].ToString(),
+                        Notes = r["AssessmentNotes"].ToString() + " " + r["ConfirmationNotes"].ToString()
                     };
                     m.IsConfirmed = m.OriginalConfirmed = m.ConfirmationId.HasValue;
                     m.Status = m.IsConfirmed ? MilestoneStatus.DoctorConfirmed : m.AssessmentState == "MeasuredAchieved" ? MilestoneStatus.MeasuredAchieved : MilestoneStatus.NotAchieved;
@@ -139,7 +140,7 @@ namespace AngleMonitorWPF.Rom
                     cmd.Parameters.AddWithValue("@reset", m.ResetDelta); cmd.Parameters.AddWithValue("@gap", m.MaxSampleGapSeconds);
                     id = Convert.ToInt32(cmd.ExecuteScalar());
                 }
-                AuditWrite(c, tx, m.PatientId, id, null, doctor.DoctorId, m.MilestoneId == 0 ? "GoalCreated" : "GoalUpdated",
+                AuditWrite(c, tx, m.PatientId, id, null, doctor, m.MilestoneId == 0 ? "GoalCreated" : "GoalUpdated",
                     before + "Sau: " + Snapshot(m) + "; " + reason);
                 tx.Commit(); return id;
             }
@@ -217,7 +218,7 @@ namespace AngleMonitorWPF.Rom
 
         private void SaveAssessment(RomMilestone m, int? sessionId, RomEvaluation result, string source, DateTime? time, string notes, DoctorSession doctor)
         {
-            RequireText(source, 255, "Nguồn đo"); RequireText(notes, 2000, "Nhận xét đánh giá");
+            RequireText(source, 255, "Nguồn đo"); RequireText(DoctorRepository.MarkDemo(doctor, notes), 2000, "Nhận xét đánh giá");
             using (var c = Open(doctor))
             using (var tx = c.BeginTransaction(IsolationLevel.Serializable))
             {
@@ -236,7 +237,7 @@ namespace AngleMonitorWPF.Rom
                     cmd.Parameters.AddWithValue("@angle", (object)result.MeasuredAngle ?? DBNull.Value); cmd.Parameters.AddWithValue("@source", source);
                     cmd.Parameters.AddWithValue("@time", (object)time ?? DBNull.Value); cmd.Parameters.AddWithValue("@status", result.Status.ToString());
                     cmd.Parameters.AddWithValue("@reps", result.AchievedRepetitions); cmd.Parameters.AddWithValue("@criteria", Snapshot(m));
-                    cmd.Parameters.AddWithValue("@notes", notes); cmd.Parameters.AddWithValue("@d", doctor.DoctorId);
+                    cmd.Parameters.AddWithValue("@notes", DoctorRepository.MarkDemo(doctor, notes)); cmd.Parameters.AddWithValue("@d", doctor.DoctorId);
                     cmd.Parameters.AddWithValue("@ms", result.Status == AssessmentStatus.MeasuredAchieved ? "MeasuredAchieved" : "NotAchieved"); cmd.ExecuteNonQuery();
                 }
                 tx.Commit();
@@ -266,7 +267,9 @@ namespace AngleMonitorWPF.Rom
                         {
                             cmd.Parameters.AddWithValue("@a", m.AssessmentId); cmd.Parameters.AddWithValue("@p", patientId);
                             cmd.Parameters.AddWithValue("@m", m.MilestoneId); cmd.Parameters.AddWithValue("@d", doctor.DoctorId);
-                            cmd.Parameters.AddWithValue("@n", change.Reason.Trim()); confirmationId = (int)cmd.ExecuteScalar();
+                            string confirmationNote = DoctorRepository.MarkDemo(doctor, change.Reason.Trim());
+                            RequireText(confirmationNote, 2000, "Ghi chú xác nhận");
+                            cmd.Parameters.AddWithValue("@n", confirmationNote); confirmationId = (int)cmd.ExecuteScalar();
                         }
                     }
                     else
@@ -275,7 +278,7 @@ namespace AngleMonitorWPF.Rom
                         using (var cmd = new SqlCommand("UPDATE dbo.RomConfirmations SET IsCurrent=0 WHERE ConfirmationId=@id AND IsCurrent=1", c, tx))
                         { cmd.Parameters.AddWithValue("@id", confirmationId); if (cmd.ExecuteNonQuery() != 1) throw new InvalidOperationException("Xác nhận đã thay đổi."); }
                     }
-                    AuditWrite(c, tx, patientId, m.MilestoneId, confirmationId, doctor.DoctorId, change.Confirm ? "Confirm" : "Revoke", change.Reason.Trim());
+                    AuditWrite(c, tx, patientId, m.MilestoneId, confirmationId, doctor, change.Confirm ? "Confirm" : "Revoke", change.Reason.Trim());
                     using (var cmd = new SqlCommand("UPDATE dbo.PatientRomMilestones SET Status=@status,UpdatedAt=SYSUTCDATETIME() WHERE MilestoneId=@id", c, tx))
                     {
                         cmd.Parameters.AddWithValue("@id", m.MilestoneId); cmd.Parameters.AddWithValue("@status", change.Confirm ? "DoctorConfirmed" : m.AssessmentState == "MeasuredAchieved" ? "MeasuredAchieved" : "NotAchieved"); cmd.ExecuteNonQuery();
@@ -284,14 +287,15 @@ namespace AngleMonitorWPF.Rom
                 tx.Commit();
             }
         }
-        private static void AuditWrite(SqlConnection c, SqlTransaction tx, int patientId, int milestoneId, int? confirmationId, int doctorId, string action, string reason)
+        private static void AuditWrite(SqlConnection c, SqlTransaction tx, int patientId, int milestoneId, int? confirmationId, DoctorSession doctor, string action, string reason)
         {
+            reason = DoctorRepository.MarkDemo(doctor, reason);
             RequireText(reason, 2000, "Nội dung lịch sử");
             using (var cmd = new SqlCommand(@"INSERT dbo.RomConfirmationAudit(PatientId,MilestoneId,ConfirmationId,DoctorId,Action,Reason)
                 VALUES(@p,@m,@c,@d,@a,@r)", c, tx))
             {
                 cmd.Parameters.AddWithValue("@p", patientId); cmd.Parameters.AddWithValue("@m", milestoneId);
-                cmd.Parameters.AddWithValue("@c", (object)confirmationId ?? DBNull.Value); cmd.Parameters.AddWithValue("@d", doctorId);
+                cmd.Parameters.AddWithValue("@c", (object)confirmationId ?? DBNull.Value); cmd.Parameters.AddWithValue("@d", doctor.DoctorId);
                 cmd.Parameters.AddWithValue("@a", action); cmd.Parameters.AddWithValue("@r", reason); cmd.ExecuteNonQuery();
             }
         }

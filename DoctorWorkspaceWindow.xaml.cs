@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Configuration;
 using System.Data;
 using System.Globalization;
 using System.Linq;
@@ -24,15 +25,24 @@ namespace AngleMonitorWPF
         private List<RomMilestone> milestones = new List<RomMilestone>();
         private RomMilestone editing;
         private DataTable sessions, assessments;
+        private static bool DemoEnabled { get { return string.Equals(ConfigurationManager.AppSettings["DoctorWorkspaceDemoMode"], "true", StringComparison.OrdinalIgnoreCase); } }
+
+        private static async Task<DoctorSession> AcquireSessionAsync(Window owner)
+        {
+            if (DemoEnabled)
+                return await Task.Run(() => new DoctorRepository(DatabaseHelper.GetConnection).OpenDemoSession(true));
+            var login = new DoctorLoginWindow { Owner = owner };
+            return login.ShowDialog() == true ? login.Session : null;
+        }
 
         public static async Task OpenAsync(Window owner, int selectedPatientId)
         {
             try
             {
                 await Task.Run(() => new DoctorWorkspaceRepository(DatabaseHelper.GetConnection).CheckSchema());
-                var login = new DoctorLoginWindow { Owner = owner };
-                if (login.ShowDialog() == true)
-                    new DoctorWorkspaceWindow(login.Session, selectedPatientId) { Owner = owner }.ShowDialog();
+                var session = await AcquireSessionAsync(owner);
+                if (session != null)
+                    new DoctorWorkspaceWindow(session, selectedPatientId) { Owner = owner }.ShowDialog();
             }
             catch (Exception ex)
             {
@@ -44,10 +54,21 @@ namespace AngleMonitorWPF
         {
             doctor = session; patientId = selectedPatientId;
             InitializeComponent(); SetDoctorLabel();
+            DemoBanner.Visibility = doctor.IsDemo ? Visibility.Visible : Visibility.Collapsed;
+            AccessPolicyText.Text = doctor.IsDemo
+                ? "Chế độ demo không xác minh danh tính bác sĩ. Mọi xác nhận được ghi Bác sĩ demo và [DEMO]. Tắt DoctorWorkspaceDemoMode để dùng tài khoản thật."
+                : "Phiên đăng nhập có hiệu lực 30 phút. Mỗi lần lưu hoặc hủy xác nhận đều yêu cầu xác thực bác sĩ và ghi nhận xét/lý do.";
+            ReloginButton.Content = doctor.IsDemo ? "Tải lại phiên demo" : "Đăng nhập lại / đổi bác sĩ";
+            ConfirmationReason.MaxLength = doctor.IsDemo ? 1993 : 2000;
             ClinicalTime.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             Loaded += async (s, e) => await RunAsync(async () => { await LoadPatientsAsync(); await RefreshPatientAsync(); });
         }
-        private void SetDoctorLabel() { DoctorLabel.Text = doctor.FullName + "\nHết hạn (UTC): " + doctor.ExpiresAtUtc.ToString("HH:mm"); }
+        private void SetDoctorLabel()
+        {
+            DoctorLabel.Text = doctor.FullName;
+            DoctorLabel.ToolTip = doctor.IsDemo ? "Chế độ demo — danh tính chưa được xác minh" :
+                "Phiên bác sĩ hết hạn (UTC): " + doctor.ExpiresAtUtc.ToString("HH:mm");
+        }
         private async Task RunAsync(Func<Task> work)
         {
             if (busy) return;
@@ -84,7 +105,7 @@ namespace AngleMonitorWPF
         }
         private async Task RefreshPatientAsync()
         {
-            if (patientId <= 0) { StatusText.Text = "Chưa có bệnh nhân. Thêm hồ sơ để bắt đầu."; return; }
+            if (patientId <= 0) { ClearPatientView(); PatientInfo.Text = "Chưa có bệnh nhân. Thêm hồ sơ để bắt đầu."; return; }
             int selectedMilestone = (ConfirmationGrid.SelectedItem as RomMilestone)?.MilestoneId ?? 0;
             var data = await Task.Run(() => new
             {
@@ -92,31 +113,30 @@ namespace AngleMonitorWPF
                 Assessments = repository.Assessments(patientId, doctor), Audit = repository.Audit(patientId, doctor)
             });
             milestones = data.Milestones; sessions = data.Sessions; assessments = data.Assessments;
-            GoalGrid.ItemsSource = milestones; ConfirmationGrid.ItemsSource = milestones; ChartMilestone.ItemsSource = milestones;
+            GoalGrid.ItemsSource = milestones; ConfirmationGrid.ItemsSource = milestones; MilestoneSummaryGrid.ItemsSource = milestones; ChartMilestone.ItemsSource = milestones;
             SessionGrid.ItemsSource = sessions.DefaultView; SessionPicker.ItemsSource = sessions.DefaultView;
             AuditGrid.ItemsSource = data.Audit.DefaultView; AssessmentGrid.ItemsSource = assessments.DefaultView;
-            var selected = milestones.FirstOrDefault(m => m.MilestoneId == selectedMilestone) ?? milestones.FirstOrDefault();
+            var selected = milestones.FirstOrDefault(m => m.MilestoneId == selectedMilestone) ?? milestones.FirstOrDefault(m => !m.OriginalConfirmed) ?? milestones.FirstOrDefault();
+            MilestoneSummaryGrid.SelectedItem = selected;
             ConfirmationGrid.SelectedItem = selected; ChartMilestone.SelectedItem = selected;
             if (sessions.Rows.Count > 0) SessionPicker.SelectedIndex = sessions.Rows.Count - 1;
             var p = PatientPicker.SelectedItem as DataRowView;
-            PatientInfo.Text = p == null ? "" : p["PatientCode"] + " — " + p["FullName"] + "\n" + p["Age"] + " tuổi • " + p["Injury"];
-            var latest = assessments.AsEnumerable().Where(r => r["MeasuredAngle"] != DBNull.Value && r["AssessmentStatus"].ToString() != "InsufficientEvidence")
-                .OrderByDescending(r => (DateTime)r["MeasurementTime"]).FirstOrDefault();
-            CurrentRom.Text = "Chưa có đánh giá";
-            if (latest != null)
-            {
-                var label = new RomMilestone { MovementType=(MovementType)Enum.Parse(typeof(MovementType), latest["MovementType"].ToString()),
-                    MeasurementConvention=(MeasurementConvention)Enum.Parse(typeof(MeasurementConvention), latest["MeasurementConvention"].ToString()) };
-                CurrentRom.Text = latest["MeasuredAngle"] + "° • " + label.MovementLabel + "\n" + label.ConventionLabel;
-            }
-            GoalSummary.Text = milestones.Count + " / " + milestones.Count(m => m.AssessmentState == "MeasuredAchieved");
+            PatientInfo.Text = p == null ? "Chưa chọn bệnh nhân" : p["PatientCode"] + " – " + p["FullName"];
+            PatientAgeText.Text = p == null || p["Age"] == DBNull.Value ? "Tuổi: chưa ghi nhận" : "Tuổi: " + p["Age"];
+            PatientInjuryText.Text = p == null || string.IsNullOrWhiteSpace(p["Injury"].ToString()) ? "Chấn thương: chưa ghi nhận" : "Chấn thương: " + p["Injury"];
+            PatientInjuryText.ToolTip = PatientInjuryText.Text;
+            var words = p == null ? new string[0] : p["FullName"].ToString().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            PatientInitials.Text = words.Length == 0 ? "—" : (words[0].Substring(0, 1) + (words.Length > 1 ? words[words.Length - 1].Substring(0, 1) : "")).ToUpperInvariant();
+            var lastSession = sessions.AsEnumerable().Where(r => r["StartTime"] != DBNull.Value && r["EndTime"] != DBNull.Value)
+                .OrderByDescending(r => (DateTime)r["StartTime"]).FirstOrDefault();
+            LatestSessionText.Text = lastSession == null ? "Chưa có buổi tập" : ((DateTime)lastSession["StartTime"]).ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("vi-VN"));
             int confirmed = milestones.Count(m => m.OriginalConfirmed);
             ConfirmedSummary.Text = confirmed + " / " + milestones.Count;
             TreatmentProgress.Value = milestones.Count == 0 ? 0 : 100.0 * confirmed / milestones.Count;
             ConventionVerified.IsChecked = QualityVerified.IsChecked = HoldSupported.IsChecked = false;
             SensorReviewNotes.Clear(); ConfirmationReason.Clear(); ClinicalAngle.Clear(); ClinicalReason.Clear(); ClinicalSource.Clear();
             ClinicalTime.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            NewGoal(); DrawSessions(); DrawProgress();
+            NewGoal(); DrawSessions(); DrawProgress(); DrawDashboard();
         }
         private async void PatientChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -137,12 +157,30 @@ namespace AngleMonitorWPF
             ConfirmationGrid.ItemsSource = GoalGrid.ItemsSource = ChartMilestone.ItemsSource = null;
             SessionGrid.ItemsSource = SessionPicker.ItemsSource = AssessmentGrid.ItemsSource = AuditGrid.ItemsSource = null;
             PatientInfo.Text = "Đang tải bệnh nhân đã chọn…"; CurrentRom.Text = "—";
+            PatientInitials.Text = "—"; PatientAgeText.Text = "Tuổi: —"; PatientInjuryText.Text = "Chấn thương: —";
+            LatestSessionText.Text = "—"; CurrentRomContext.Text = GoalContext.Text = ""; MilestoneSummaryGrid.ItemsSource = null; DashboardChart.Series = new SeriesCollection();
             GoalSummary.Text = ConfirmedSummary.Text = "—"; TreatmentProgress.Value = 0;
             SessionChart.Series = new SeriesCollection(); ProgressChart.Series = new SeriesCollection(); NewGoal();
         }
         private void PatientGridChanged(object sender, SelectionChangedEventArgs e)
         { if (!loading && !busy && PatientGrid.SelectedItem is DataRowView row) PatientPicker.SelectedValue = row["Id"]; }
-        private void Navigate_Click(object sender, RoutedEventArgs e) { Modules.SelectedIndex = int.Parse(((Button)sender).Tag.ToString()); }
+        private void Navigate_Click(object sender, RoutedEventArgs e) { ShowModule(int.Parse(((FrameworkElement)sender).Tag.ToString())); }
+        private void ShowModule(int index)
+        {
+            Modules.SelectedIndex = index;
+            foreach (var nav in SidebarNavigation.Children.OfType<RadioButton>())
+                nav.IsChecked = int.Parse(nav.Tag.ToString()) == (index == 3 ? 4 : index);
+        }
+        private void OpenConfirmation_Click(object sender, RoutedEventArgs e) { ShowModule(4); }
+        private void OpenGoals_Click(object sender, RoutedEventArgs e) { ShowModule(3); }
+        private void DashboardMilestoneSelected(object sender, SelectionChangedEventArgs e)
+        {
+            var m = MilestoneSummaryGrid.SelectedItem as RomMilestone;
+            if (m == null) return;
+            ConfirmationGrid.SelectedItem = m;
+            ChartMilestone.SelectedItem = m;
+            DrawDashboard();
+        }
         private async void Refresh_Click(object sender, RoutedEventArgs e)
         {
             if (HasChanges() && MessageBox.Show(this, "Bỏ các checkbox chưa lưu và tải lại từ database?", "Thay đổi chưa lưu", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
@@ -150,8 +188,13 @@ namespace AngleMonitorWPF
         }
         private async void Relogin_Click(object sender, RoutedEventArgs e)
         {
-            var login = new DoctorLoginWindow { Owner = this };
-            if (login.ShowDialog() == true) { doctor = login.Session; SetDoctorLabel(); if (!HasChanges()) await RunAsync(RefreshPatientAsync); }
+            await RunAsync(async () =>
+            {
+                var session = await AcquireSessionAsync(this);
+                if (session == null) return;
+                doctor = session; SetDoctorLabel();
+                if (!HasChanges()) await RefreshPatientAsync();
+            });
         }
         private async void AddPatient_Click(object sender, RoutedEventArgs e)
         {
@@ -203,6 +246,7 @@ namespace AngleMonitorWPF
         private void ConfirmationSelected(object sender, SelectionChangedEventArgs e)
         {
             var m = ConfirmationGrid.SelectedItem as RomMilestone;
+            if (m != null && ChartMilestone.SelectedItem != m) ChartMilestone.SelectedItem = m;
             AssessmentTarget.Text = m == null ? "Chọn mốc ở bảng phía trên" : "Mốc #" + m.MilestoneId + ": " + m.MovementLabel + " " + m.TargetAngle + "° • " + m.ConventionLabel;
             ConventionVerified.IsChecked = QualityVerified.IsChecked = HoldSupported.IsChecked = false;
             ClinicalAngle.Clear(); ClinicalSource.Clear(); ClinicalReason.Clear(); SensorReviewNotes.Clear();
@@ -243,11 +287,11 @@ namespace AngleMonitorWPF
             }).ToList();
             if (changes.Count == 0) { MessageBox.Show(this, "Chưa có checkbox thay đổi."); return; }
             if (string.IsNullOrWhiteSpace(ConfirmationReason.Text)) { MessageBox.Show(this, "Nhập nhận xét xác nhận hoặc lý do hủy trước khi lưu."); return; }
-            var login = new DoctorLoginWindow { Owner = this };
-            if (login.ShowDialog() != true) return;
-            doctor = login.Session; SetDoctorLabel();
             await RunAsync(async () =>
             {
+                var session = await AcquireSessionAsync(this);
+                if (session == null) return;
+                doctor = session; SetDoctorLabel();
                 foreach (var change in changes) RomMilestoneService.ValidateConfirmation(patientId, milestones.Single(m => m.MilestoneId == change.MilestoneId), change, doctor);
                 await Task.Run(() => repository.SaveConfirmations(patientId, changes, doctor)); await RefreshPatientAsync();
             });
@@ -257,7 +301,13 @@ namespace AngleMonitorWPF
             if (patientId <= 0) return;
             new AnalysisTab(patientId, doctor) { Owner = this }.ShowDialog();
         }
-        private void ChartMilestoneChanged(object sender, SelectionChangedEventArgs e) { DrawProgress(); }
+        private void ChartMilestoneChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var selected = ChartMilestone.SelectedItem as RomMilestone;
+            if (selected != null && MilestoneSummaryGrid.SelectedItem != selected)
+                MilestoneSummaryGrid.SelectedItem = selected;
+            DrawProgress(); DrawDashboard();
+        }
         private static Axis DateAxis()
         { return new Axis { Title = "Ngày", LabelFormatter = x => x > 0 && x < 2958466 ? DateTime.FromOADate(x).ToString("dd/MM HH:mm") : "" }; }
         private void DrawSessions()
@@ -302,6 +352,37 @@ namespace AngleMonitorWPF
             };
             ProgressChart.AxisX.Clear(); ProgressChart.AxisX.Add(DateAxis());
             ProgressChart.AxisY.Clear(); ProgressChart.AxisY.Add(new Axis { Title = "Góc theo quy ước (°)" });
+        }
+        private void DrawDashboard()
+        {
+            if (DashboardChart == null) return;
+            DashboardChart.Series = new SeriesCollection();
+            DashboardChart.AxisX.Clear(); DashboardChart.AxisX.Add(DateAxis());
+            DashboardChart.AxisY.Clear(); DashboardChart.AxisY.Add(new Axis { Title = "ROM (°)" });
+            var m = ChartMilestone.SelectedItem as RomMilestone;
+            CurrentRom.Text = "—"; GoalSummary.Text = m == null ? "—" : m.TargetAngle.ToString("0.0") + "°";
+            CurrentRomContext.Text = m == null ? "Chưa có đánh giá" : m.MovementLabel;
+            GoalContext.Text = m == null ? "Chưa thiết lập mục tiêu" : m.ConventionLabel;
+            DashboardChartCaption.Text = m == null ? "Chọn hoặc tạo một mốc để theo dõi tiến triển." :
+                "Mốc #" + m.MilestoneId + " • " + m.MovementLabel + " • " + m.ConventionLabel;
+            if (m == null || assessments == null) return;
+            // Compare only valid assessments for this specific patient, goal revision and
+            // angle convention. Legacy unclassified PeakROM is kept in the ROM detail view.
+            var rows = assessments.AsEnumerable().Where(r => (int)r["MilestoneId"] == m.MilestoneId &&
+                (int)r["MilestoneRevision"] == m.Revision && r["MeasuredAngle"] != DBNull.Value &&
+                r["MeasurementTime"] != DBNull.Value && r["AssessmentStatus"].ToString() != "InsufficientEvidence")
+                .OrderBy(r => (DateTime)r["MeasurementTime"]).ThenBy(r => (int)r["AssessmentId"]).ToList();
+            if (rows.Count == 0) { DashboardChartCaption.Text += " • Chưa có đánh giá hợp lệ"; return; }
+            CurrentRom.Text = ((double)rows.Last()["MeasuredAngle"]).ToString("0.0") + "°";
+            var values = new ChartValues<ObservablePoint>(rows.Select(r => new ObservablePoint(((DateTime)r["MeasurementTime"]).ToOADate(), (double)r["MeasuredAngle"])));
+            var teal = (Color)ColorConverter.ConvertFromString("#0BAB9D");
+            DashboardChart.Series.Add(new LineSeries { Title = "Kết quả đánh giá ROM", Values = values,
+                Stroke = new SolidColorBrush(teal), StrokeThickness = 3, PointGeometrySize = 8,
+                PointForeground = Brushes.White, LineSmoothness = 0,
+                Fill = new LinearGradientBrush(Color.FromArgb(65, teal.R, teal.G, teal.B), Colors.Transparent, 90) });
+            DashboardChart.AxisY[0].Sections = new SectionsCollection { new AxisSection { Value = m.TargetAngle, Stroke = Brushes.Silver, StrokeThickness = 1 } };
+            DashboardChart.AxisY[0].MinValue = Math.Max(0, Math.Floor(Math.Min(values.Min(v => v.Y), m.TargetAngle) / 10) * 10 - 10);
+            DashboardChart.AxisY[0].MaxValue = Math.Min(180, Math.Ceiling(Math.Max(values.Max(v => v.Y), m.TargetAngle) / 10) * 10 + 10);
         }
         private void Window_Closing(object sender, CancelEventArgs e)
         {

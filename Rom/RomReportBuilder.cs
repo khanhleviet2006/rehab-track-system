@@ -14,6 +14,8 @@ namespace AngleMonitorWPF.Rom
             var html = new StringBuilder("<section style='page-break-before:always;padding:12mm 15mm;box-sizing:border-box;width:210mm'>");
             html.Append("<h2>Mục tiêu ROM và xác nhận bác sĩ</h2><p>Mã nội bộ bệnh nhân: ").Append(patientId);
             html.Append(". Thời điểm xác nhận: UTC. Kết quả đo và quyết định xác nhận được ghi riêng.</p>");
+            if (milestones.Any(m => m.IsDemoConfirmation))
+                html.Append("<p style='background:#fff2cf;color:#694b10;padding:10px;font-weight:bold'>BÁO CÁO DEMO — Có xác nhận từ Bác sĩ demo; danh tính bác sĩ chưa được xác minh.</p>");
             html.Append("<table style='width:100%;border-collapse:collapse;font-size:11px' border='1' cellpadding='7'><thead><tr><th>Mốc / vận động / quy ước</th><th>Mục tiêu / đo (°)</th><th>Đánh giá / nguồn</th><th>Xác nhận</th><th>Ghi chú</th></tr></thead><tbody>");
             int count = 0;
             foreach (var m in milestones)

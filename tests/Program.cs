@@ -50,6 +50,9 @@ internal static class Program
         Test("clinical result does not auto-confirm", () => { var g=Goal(); var c=new ClinicalMeasurement { Angle=110,Repetitions=2,HoldSeconds=1,MeasuredAt=DateTime.Now,Source="Goniometer",Reason="Clinical review" }; Equal(AssessmentStatus.MeasuredAchieved,RomMilestoneService.EvaluateClinical(g,c).Status); Equal(false,g.IsConfirmed); });
         Test("clinical results enforce repetition criteria", () => { var c=new ClinicalMeasurement { Angle=110,Repetitions=1,HoldSeconds=1,MeasuredAt=DateTime.Now,Source="Goniometer",Reason="Clinical review" }; Equal(AssessmentStatus.NotAchieved,RomMilestoneService.EvaluateClinical(Goal(),c).Status); });
         Test("password salted hashes verify and reject wrong password", () => { var a=PasswordHasher.Hash("A-strong-test-password1"); var b=PasswordHasher.Hash("A-strong-test-password1"); Equal(false,a==b); Equal(true,PasswordHasher.Verify("A-strong-test-password1",a)); Equal(false,PasswordHasher.Verify("wrong",a)); Equal(false,PasswordHasher.Verify("anything","bad")); });
+        Test("demo cannot open when disabled before any SQL access", () => Throws<UnauthorizedAccessException>(()=>new DoctorRepository(()=>throw new Exception("SQL was accessed")).OpenDemoSession(false)));
+        Test("demo marker and session are explicit", () => { var d=new DoctorSession(4,"Bác sĩ demo","Doctor",true); Equal(true,d.IsDemo); Equal(DateTime.MaxValue,d.ExpiresAtUtc); Equal("[DEMO] review",DoctorRepository.MarkDemo(d,"review")); Equal("review",DoctorRepository.MarkDemo(Doctor(),"review")); });
+        Test("demo confirmation is visibly distinct in report", () => { var m=Confirmable(); m.Status=MilestoneStatus.DoctorConfirmed; m.OriginalConfirmed=true; m.ConfirmationId=7; m.DoctorName="Bác sĩ demo"; m.DoctorUsername=DoctorRepository.DemoUsername; Equal("Xác nhận demo",m.StatusLabel); Equal(true,RomReportBuilder.Build(1,new[]{m}).Contains("BÁO CÁO DEMO")); });
         Test("doctor can check eligible milestone", () => { var m=Confirmable(); RomMilestoneService.ValidateConfirmation(1,m,Change(m,true),Doctor()); });
         Test("cannot check without achieved evidence", () => { var m=Confirmable(); m.AssessmentState="InsufficientEvidence"; Throws<InvalidOperationException>(()=>RomMilestoneService.ValidateConfirmation(1,m,Change(m,true),Doctor())); });
         Test("revoke requires reason", () => { var m=Confirmable(); m.ConfirmationId=2; var change=Change(m,false); change.Reason=" "; Throws<ArgumentException>(()=>RomMilestoneService.ValidateConfirmation(1,m,change,Doctor())); });
@@ -184,6 +187,47 @@ internal static class Program
             Test("SQL patient session cannot confirm", () => Throws<UnauthorizedAccessException>(()=>repo.SaveConfirmations(1,new[]{Change(load(),false)},new DoctorSession(1,"Patient","Patient"))));
             Test("SQL deactivated doctor cannot change confirmations", () => { Execute(connection,"UPDATE dbo.DoctorAccounts SET IsActive=0 WHERE DoctorId=1"); Throws<UnauthorizedAccessException>(()=>repo.SaveConfirmations(1,new[]{Change(load(),false)},doctor)); Execute(connection,"UPDATE dbo.DoctorAccounts SET IsActive=1 WHERE DoctorId=1"); });
             Test("SQL login lockout after five wrong passwords", () => { for(int i=0;i<5;i++) Throws<UnauthorizedAccessException>(()=>auth.Authenticate("doctor","wrong")); Throws<UnauthorizedAccessException>(()=>auth.Authenticate("doctor","Valid-test-password1")); });
+            Test("SQL demo account is gated by configuration", () => { Throws<UnauthorizedAccessException>(()=>auth.OpenDemoSession(false)); Equal(0,Scalar(connection,"SELECT COUNT(*) FROM dbo.DoctorAccounts WHERE Username=N'__rehabtrack_demo__'")); });
+            DoctorSession demo=null;
+            Test("SQL demo account is created once with an unusable password", () =>
+            {
+                demo=auth.OpenDemoSession(true); Equal(true,demo.IsDemo); Equal("Bác sĩ demo",demo.FullName);
+                Equal(demo.DoctorId,auth.OpenDemoSession(true).DoctorId);
+                Equal(1,Scalar(connection,"SELECT COUNT(*) FROM dbo.DoctorAccounts WHERE Username=N'__rehabtrack_demo__'"));
+                Throws<UnauthorizedAccessException>(()=>auth.Authenticate(DoctorRepository.DemoUsername,"unknown"));
+            });
+            if (demo==null) throw new Exception("Cannot continue without demo account.");
+            Execute(connection,"INSERT dbo.Users(PatientCode,FullName) VALUES(N'DEMO4',N'Demo patient')");
+            int demoGoal=0;
+            Test("SQL demo assessment, checkbox and audit are marked", () =>
+            {
+                demoGoal=repo.SaveMilestone(Goal(4),demo,"Demo treatment goal");
+                var m=repo.Milestones(4,demo).Single(x=>x.MilestoneId==demoGoal);
+                repo.AssessClinical(m,new ClinicalMeasurement { Angle=110,Repetitions=2,HoldSeconds=1,MeasuredAt=DateTime.Now,Source="Goniometer",Reason="Demo examination" },demo);
+                m=repo.Milestones(4,demo).Single(x=>x.MilestoneId==demoGoal);
+                repo.SaveConfirmations(4,new[]{Change(m,true)},demo);
+                m=new DoctorWorkspaceRepository(factory).Milestones(4,auth.OpenDemoSession(true)).Single(x=>x.MilestoneId==demoGoal);
+                Equal(true,m.IsConfirmed); Equal(true,m.IsDemoConfirmation); Equal("Xác nhận demo",m.StatusLabel);
+                Equal(true,m.Notes.Contains("[DEMO]"));
+                Equal(true,RomReportBuilder.Build(4,new[]{m}).Contains("BÁO CÁO DEMO"));
+                Equal(2,Scalar(connection,"SELECT COUNT(*) FROM dbo.RomConfirmationAudit WHERE PatientId=4 AND Reason LIKE N'[[]DEMO]%'"));
+            });
+            Test("SQL demo revoke persists reason and history", () =>
+            {
+                var m=repo.Milestones(4,demo).Single(x=>x.MilestoneId==demoGoal);
+                repo.SaveConfirmations(4,new[]{Change(m,false)},demo);
+                Equal(false,new DoctorWorkspaceRepository(factory).Milestones(4,demo).Single(x=>x.MilestoneId==demoGoal).IsConfirmed);
+                Equal(1,Scalar(connection,"SELECT COUNT(*) FROM dbo.RomConfirmationAudit WHERE PatientId=4 AND Action='Revoke' AND Reason LIKE N'[[]DEMO]%'"));
+            });
+            Test("SQL demo identity cannot impersonate real doctor", () =>
+                Throws<UnauthorizedAccessException>(()=>repo.Patients(new DoctorSession(doctor.DoctorId,"Bác sĩ demo","Doctor",true))));
+            Test("SQL disabled demo account is not reactivated", () =>
+            {
+                Execute(connection,"UPDATE dbo.DoctorAccounts SET IsActive=0 WHERE Username=N'__rehabtrack_demo__'");
+                Throws<UnauthorizedAccessException>(()=>auth.OpenDemoSession(true));
+                Equal(0,Scalar(connection,"SELECT COUNT(*) FROM dbo.DoctorAccounts WHERE Username=N'__rehabtrack_demo__' AND IsActive=1"));
+                Equal(1,Scalar(connection,"SELECT COUNT(*) FROM dbo.DoctorAccounts WHERE Username=N'doctor' AND IsActive=1"));
+            });
         }
         finally { SqlConnection.ClearAllPools(); Execute(admin,"ALTER DATABASE ["+database+"] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE ["+database+"]"); }
     }

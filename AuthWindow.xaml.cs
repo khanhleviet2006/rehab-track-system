@@ -13,11 +13,23 @@ namespace AngleMonitorWPF
         }
         private void BtnHoSoMoi_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Chức năng tạo hồ sơ bệnh nhân mới đang được phát triển.", "Thông báo");
+            var form = new RehabTrack.AddPatientWindow { Owner = this };
+            if (form.ShowDialog() == true)
+            {
+                // Creating a patient is not doctor authentication. Continue to the
+                // existing patient picker so the patient is explicitly selected.
+                new PatientSelectionWindow().Show();
+                Close();
+            }
         }
         private void BtnClose_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
+        }
+        private void BtnDanhSach_Click(object sender, RoutedEventArgs e)
+        {
+            new PatientSelectionWindow().Show();
+            Close();
         }
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {

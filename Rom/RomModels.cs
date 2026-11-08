@@ -11,11 +11,12 @@ namespace AngleMonitorWPF.Rom
 
     public sealed class DoctorSession
     {
-        internal DoctorSession(int id, string name, string role)
-        { DoctorId = id; FullName = name; Role = role; ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30); }
+        internal DoctorSession(int id, string name, string role, bool isDemo = false)
+        { DoctorId = id; FullName = name; Role = role; IsDemo = isDemo; ExpiresAtUtc = isDemo ? DateTime.MaxValue : DateTime.UtcNow.AddMinutes(30); }
         public int DoctorId { get; private set; }
         public string FullName { get; private set; }
         public string Role { get; private set; }
+        public bool IsDemo { get; private set; }
         public DateTime ExpiresAtUtc { get; private set; }
     }
 
@@ -40,6 +41,7 @@ namespace AngleMonitorWPF.Rom
         public string MeasurementSource { get; set; }
         public string AssessmentState { get; set; }
         public string DoctorName { get; set; }
+        public string DoctorUsername { get; set; }
         public DateTime? ConfirmedAt { get; set; }
         public int? ConfirmationId { get; set; }
         public string Notes { get; set; }
@@ -52,7 +54,8 @@ namespace AngleMonitorWPF.Rom
         }
         public string MovementLabel { get { return MovementType == MovementType.ElbowFlexion ? "Gập khuỷu tay" : "Duỗi khuỷu tay"; } }
         public string ConventionLabel { get { return MeasurementConvention == MeasurementConvention.FlexionDegrees ? "Góc gập (0° duỗi thẳng)" : MeasurementConvention == MeasurementConvention.ExtensionDeficit ? "Mức thiếu duỗi (0° đầy đủ)" : MeasurementConvention == MeasurementConvention.IncludedJointAngle ? "Góc trong (180° duỗi thẳng)" : "Chưa xác định"; } }
-        public string StatusLabel { get { return Status == MilestoneStatus.DoctorConfirmed ? "Bác sĩ đã xác nhận" : Status == MilestoneStatus.MeasuredAchieved ? "Đo đạt, chờ xác nhận" : "Chưa có kết quả đo đạt"; } }
+        public bool IsDemoConfirmation { get { return OriginalConfirmed && DoctorUsername == DoctorRepository.DemoUsername; } }
+        public string StatusLabel { get { return Status == MilestoneStatus.DoctorConfirmed ? (IsDemoConfirmation ? "Xác nhận demo" : "Bác sĩ đã xác nhận") : Status == MilestoneStatus.MeasuredAchieved ? "Đo đạt, chờ xác nhận" : "Chưa có kết quả đo đạt"; } }
         public string EvidenceLabel { get { return AssessmentState == "MeasuredAchieved" ? "Đo đạt" : AssessmentState == "NotAchieved" ? "Chưa đạt" : "Chưa đủ bằng chứng"; } }
         public event PropertyChangedEventHandler PropertyChanged;
     }

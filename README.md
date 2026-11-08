@@ -7,7 +7,7 @@
 * **Trực quan hóa:** Tích hợp WebView2 xử lý biểu đồ thời gian thực.
 * **Cơ sở dữ liệu:** SQL Server quản lý thông tin bệnh nhân và lịch sử tập luyện.
 
-Doctor Workspace: xem [hướng dẫn triển khai, migration, tài khoản bác sĩ và kiểm thử](docs/DOCTOR_WORKSPACE_IMPLEMENTATION.md).
+Doctor Workspace trên SQL Server: xem [hướng dẫn triển khai, migration, chế độ demo và kiểm thử](docs/DOCTOR_WORKSPACE_IMPLEMENTATION.md).
 
 ## ⚙️ Hướng dẫn cài đặt
 1. Clone repository này về máy tính.
@@ -35,4 +35,4 @@ Hệ thống sử dụng cơ sở dữ liệu tên là **`RehabDB`** gồm 3 b�
    ```
 3. Chọn database `RehabDB`, chạy `create_tables.sql` **chỉ với database mới**. Với database đang có dữ liệu, giữ nguyên các bảng hiện có.
 4. Chạy `migrations/001_doctor_workspace.sql` trên database đó; migration kiểm tra phiên bản và có thể chạy lại.
-5. Sửa connection string `RehabDB` trong `App.config`, cấp tài khoản bác sĩ bằng `tools/Provision-Doctor.ps1` rồi mở ứng dụng.
+5. Sửa connection string `RehabDB` trong `App.config`. Mặc định `DoctorWorkspaceDemoMode=true` mở chế độ demo không mật khẩu, có nhãn DEMO trên xác nhận. Khi dùng bác sĩ thật, đặt `false`, cấp tài khoản bằng `tools/Provision-Doctor.ps1` rồi mở ứng dụng.

@@ -28,9 +28,16 @@ function Control($name) { return $window.FindName($name) }
 $patient = [pscustomobject]@{ Id=1; DisplayName='BN-DEMO — Bệnh nhân minh họa' }
 (Control 'PatientPicker').ItemsSource = @($patient)
 (Control 'PatientPicker').SelectedIndex = 0
-(Control 'PatientInfo').Text = "BN-DEMO — Bệnh nhân minh họa`nTheo dõi phục hồi chức năng khuỷu tay"
+(Control 'PatientInfo').Text = 'BN-DEMO — Bệnh nhân minh họa'
 (Control 'CurrentRom').Text = "110° • Gập khuỷu tay`nGóc gập (0° duỗi thẳng)"
-(Control 'GoalSummary').Text = '5 / 3'
+(Control 'GoalSummary').Text = '110.0°'
+(Control 'GoalContext').Text = 'Góc gập (0° duỗi thẳng)'
+(Control 'CurrentRom').Text = '110.0°'
+(Control 'CurrentRomContext').Text = 'Gập khuỷu tay'
+(Control 'LatestSessionText').Text = '08 thg 11 2026'
+(Control 'PatientInitials').Text = 'MH'
+(Control 'PatientAgeText').Text = 'Tuổi: 25 (minh họa)'
+(Control 'PatientInjuryText').Text = 'Chấn thương: hồ sơ minh họa'
 (Control 'ConfirmedSummary').Text = '2 / 5'
 (Control 'TreatmentProgress').Value = 40
 $goals = @()
@@ -45,10 +52,13 @@ foreach ($angle in @(90,100,110,120,130)) {
     $m.AssessmentState=if($angle -le 110){'MeasuredAchieved'}else{'NotAchieved'}
     $m.Status=if($angle -le 100){'DoctorConfirmed'}elseif($angle -le 110){'MeasuredAchieved'}else{'NotAchieved'}
     $m.IsConfirmed=$angle -le 100
+    $m.OriginalConfirmed=$m.IsConfirmed
     if($m.IsConfirmed){$m.DoctorName='Bác sĩ minh họa'; $m.ConfirmedAt=[datetime]'2026-11-08T07:15:00'}
     $m.Notes='Dữ liệu minh họa bố cục, không phải kết quả điều trị.'
     $goals += $m
 }
+(Control 'MilestoneSummaryGrid').ItemsSource = $goals
+(Control 'MilestoneSummaryGrid').SelectedIndex = 2
 (Control 'ConfirmationGrid').ItemsSource = $goals
 (Control 'ConfirmationGrid').SelectedIndex = 2
 (Control 'GoalGrid').ItemsSource = $goals
@@ -58,6 +68,21 @@ foreach ($angle in @(90,100,110,120,130)) {
 (Control 'ClinicalSource').Text='Thước đo góc — minh họa'
 (Control 'ClinicalReason').Text='Minh họa nhập kết quả khám; không lưu vào hồ sơ.'
 (Control 'ConfirmationReason').Text='Minh họa nhận xét trước khi lưu xác nhận.'
+$values = New-Object 'LiveCharts.ChartValues[double]'
+foreach ($a in @(85,90,96,102,106,110)) {$values.Add([double]$a)}
+$line = New-Object LiveCharts.Wpf.LineSeries
+$line.Values=$values; $line.Title='ROM minh họa'; $line.Stroke=[System.Windows.Media.Brushes]::LightSeaGreen
+$line.PointForeground=[System.Windows.Media.Brushes]::White; $line.PointGeometrySize=8
+$line.Fill=New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(40,11,171,157))
+$line.LineSmoothness=0
+(Control 'DashboardChart').Series.Add($line)
+$axis = New-Object LiveCharts.Wpf.Axis
+$axis.Title='Buổi tập (minh họa)'; $axis.Labels=@('Buổi 1','Buổi 2','Buổi 3','Buổi 4','Buổi 5','Buổi 6')
+(Control 'DashboardChart').AxisX.Add($axis)
+$yAxis=New-Object LiveCharts.Wpf.Axis
+$yAxis.Title='ROM (°)'; $yAxis.MinValue=60; $yAxis.MaxValue=140
+(Control 'DashboardChart').AxisY.Add($yAxis)
+(Control 'DashboardChartCaption').Text='Dữ liệu minh họa bố cục; không phải kết quả điều trị.'
 $null=New-Item -ItemType Directory -Force $OutputDirectory
 $window.Show()
 try {

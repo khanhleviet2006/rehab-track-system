@@ -6,13 +6,59 @@ namespace AngleMonitorWPF.Rom
 {
     public sealed class DoctorRepository
     {
+        public const string DemoUsername = "__rehabtrack_demo__";
         private readonly Func<SqlConnection> connectionFactory;
         public DoctorRepository(Func<SqlConnection> connectionFactory) { this.connectionFactory = connectionFactory; }
+
+        // This account is only available when the application explicitly enables demo mode.
+        // Its random password is discarded, so it cannot be used as a normal doctor login.
+        public DoctorSession OpenDemoSession(bool demoEnabled)
+        {
+            if (!demoEnabled) throw new UnauthorizedAccessException("Chế độ demo chưa được bật.");
+            using (var c = connectionFactory())
+            {
+                c.Open();
+                using (var tx = c.BeginTransaction(IsolationLevel.Serializable))
+                {
+                    int id;
+                    using (var cmd = new SqlCommand(@"SELECT DoctorId,FullName,Username,Role,IsActive FROM dbo.DoctorAccounts WITH(UPDLOCK,HOLDLOCK) WHERE Username=@u", c, tx))
+                    {
+                        cmd.Parameters.Add("@u", SqlDbType.NVarChar, 100).Value = DemoUsername;
+                        using (var r = cmd.ExecuteReader())
+                        {
+                            if (r.Read())
+                            {
+                                if (!string.Equals((string)r["Username"], DemoUsername, StringComparison.Ordinal) ||
+                                    (string)r["FullName"] != "Bác sĩ demo" || (string)r["Role"] != "Doctor" || !(bool)r["IsActive"])
+                                    throw new UnauthorizedAccessException("Tài khoản demo đã bị thay đổi hoặc vô hiệu hóa; cần quản trị viên kiểm tra.");
+                                id = (int)r["DoctorId"];
+                            }
+                            else id = 0;
+                        }
+                    }
+                    if (id == 0)
+                    {
+                        var random = new byte[32];
+                        using (var generator = System.Security.Cryptography.RandomNumberGenerator.Create()) generator.GetBytes(random);
+                        using (var cmd = new SqlCommand(@"INSERT dbo.DoctorAccounts(FullName,Username,PasswordHash,Role)
+                            OUTPUT INSERTED.DoctorId VALUES(@name,@u,@hash,'Doctor')", c, tx))
+                        {
+                            cmd.Parameters.Add("@name", SqlDbType.NVarChar, 100).Value = "Bác sĩ demo";
+                            cmd.Parameters.Add("@u", SqlDbType.NVarChar, 100).Value = DemoUsername;
+                            cmd.Parameters.Add("@hash", SqlDbType.VarChar, 256).Value = PasswordHasher.Hash(Convert.ToBase64String(random));
+                            id = (int)cmd.ExecuteScalar();
+                        }
+                    }
+                    tx.Commit();
+                    return new DoctorSession(id, "Bác sĩ demo", "Doctor", true);
+                }
+            }
+        }
 
         // Serialized per account; PBKDF2 and DB work are called from a worker by the WPF dialog.
         public DoctorSession Authenticate(string username, string password)
         {
-            if (string.IsNullOrWhiteSpace(username) || username.Trim().Length > 100 || string.IsNullOrEmpty(password) || password.Length > 256)
+            if (string.IsNullOrWhiteSpace(username) || username.Trim().Length > 100 || username.Trim() == DemoUsername || string.IsNullOrEmpty(password) || password.Length > 256)
                 throw new UnauthorizedAccessException("Tên đăng nhập hoặc mật khẩu không hợp lệ.");
             using (var c = connectionFactory())
             {
@@ -53,11 +99,16 @@ namespace AngleMonitorWPF.Rom
         internal static void RequireActive(SqlConnection c, SqlTransaction tx, DoctorSession doctor)
         {
             RomMilestoneService.Authorize(doctor);
-            using (var cmd = new SqlCommand("SELECT COUNT(*) FROM dbo.DoctorAccounts WITH(HOLDLOCK) WHERE DoctorId=@d AND IsActive=1 AND Role IN ('Doctor','Admin')", c, tx))
+            using (var cmd = new SqlCommand("SELECT Username FROM dbo.DoctorAccounts WITH(HOLDLOCK) WHERE DoctorId=@d AND IsActive=1 AND Role IN ('Doctor','Admin')", c, tx))
             {
                 cmd.Parameters.AddWithValue("@d", doctor.DoctorId);
-                if ((int)cmd.ExecuteScalar() != 1) throw new UnauthorizedAccessException("Tài khoản bác sĩ không còn quyền truy cập.");
+                var username = cmd.ExecuteScalar() as string;
+                if (username == null || (doctor.IsDemo && !string.Equals(username, DemoUsername, StringComparison.Ordinal)))
+                    throw new UnauthorizedAccessException("Tài khoản bác sĩ không còn quyền truy cập.");
             }
         }
+
+        internal static string MarkDemo(DoctorSession doctor, string value)
+        { return doctor.IsDemo ? "[DEMO] " + value : value; }
     }
 }
