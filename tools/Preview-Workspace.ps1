@@ -1,4 +1,4 @@
-# Render the project's real WPF XAML with explicitly illustrative data only.
+﻿# Render the project's real WPF XAML with explicitly illustrative data only.
 # Windows PowerShell 5.1 -STA. No login, database connection or clinical writes.
 param([string]$OutputDirectory = 'preview')
 $ErrorActionPreference = 'Stop'
@@ -21,6 +21,7 @@ foreach ($node in $xml.SelectNodes('//*')) {
 }
 $window = [System.Windows.Markup.XamlReader]::Parse($xml.OuterXml)
 $window.Width = 1600; $window.Height = 1000
+$window.Content.Background = $window.Background
 function Control($name) { return $window.FindName($name) }
 (Control 'DoctorLabel').Text = 'Bác sĩ minh họa'
 (Control 'StatusText').Text = 'XEM TRƯỚC — DỮ LIỆU MINH HỌA — Không kết nối SQL Server; không ghi xác nhận.'
