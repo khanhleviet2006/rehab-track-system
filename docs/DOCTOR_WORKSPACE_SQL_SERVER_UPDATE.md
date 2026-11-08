@@ -1,6 +1,6 @@
 # Doctor Workspace cho repository SQL Server
 
-Ngày cập nhật cục bộ: 08/11/2026. Repository đích: `khanhleviet2006/rehab-track-system`, nhánh làm việc `feature/doctor-workspace-rom`. Bản này chưa commit hoặc push lên GitHub.
+Ngày cập nhật: 08/11/2026. Repository đích: `khanhleviet2006/rehab-track-system`; triển khai trên `feature/doctor-workspace-rom` và đưa vào `master` theo yêu cầu người dùng.
 
 ## Kiến trúc và tương thích
 

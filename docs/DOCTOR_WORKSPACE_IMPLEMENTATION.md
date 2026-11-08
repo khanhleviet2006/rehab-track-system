@@ -1,6 +1,6 @@
 # Doctor Workspace — RehabTrack
 
-> Bản chỉnh sửa cục bộ mới nhất cho repository SQL Server xem [DOCTOR_WORKSPACE_SQL_SERVER_UPDATE.md](DOCTOR_WORKSPACE_SQL_SERVER_UPDATE.md). Kết quả build Windows và 61 kiểm thử SQL phía dưới thuộc commit cũ trước khi thêm giao diện mới và chế độ demo. Chưa push bản chỉnh sửa cục bộ này.
+> Bản chỉnh sửa mới nhất cho repository SQL Server xem [DOCTOR_WORKSPACE_SQL_SERVER_UPDATE.md](DOCTOR_WORKSPACE_SQL_SERVER_UPDATE.md). Kết quả build Windows và 61 kiểm thử SQL phía dưới thuộc commit cũ trước khi thêm giao diện mới và chế độ demo.
 
 Bản đối chiếu với ZIP người dùng gửi và cập nhật luồng xuất PDF: [BAO_CAO_DOI_CHIEU_VA_NANG_CAP.md](BAO_CAO_DOI_CHIEU_VA_NANG_CAP.md). Build Windows tự động được cấu hình trong `.github/workflows/windows-validation.yml`; xem kết quả từng lần chạy tại Actions của PR.
 

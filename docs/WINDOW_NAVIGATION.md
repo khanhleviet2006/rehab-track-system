@@ -36,4 +36,4 @@ flowchart LR
 - Nút Lưu xác nhận ở dashboard và checkbox chi tiết dùng chung danh sách mốc, transaction và audit. Chế độ thật xác thực lại khi lưu; demo dùng tài khoản SQL riêng và ghi dấu `[DEMO]`.
 - AuthWindow là luồng truy cập bệnh nhân, không phải màn hình đăng nhập bác sĩ. Form mới cho nhập MSBN, chọn từ danh sách hoặc thêm hồ sơ; tạo xong chuyển tới danh sách để chọn bệnh nhân rõ ràng.
 
-Xem [bản cập nhật SQL Server](DOCTOR_WORKSPACE_SQL_SERVER_UPDATE.md) để biết cấu hình, migration và giới hạn kiểm thử mới nhất. Các thay đổi vẫn ở workspace, chưa push lên GitHub.
+Xem [bản cập nhật SQL Server](DOCTOR_WORKSPACE_SQL_SERVER_UPDATE.md) để biết cấu hình, migration và giới hạn kiểm thử mới nhất.
