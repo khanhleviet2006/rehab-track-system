@@ -27,6 +27,15 @@ jobs:
         run: |
           & .\tests\bin\Release\net48\RehabTrack.Rom.Tests.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Render WPF previews with illustrative data
+        shell: powershell
+        run: powershell.exe -NoProfile -STA -File tools/Preview-Workspace.ps1
+      - name: Upload WPF previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: DoctorWorkspace-Preview
+          path: preview/*.png
+          retention-days: 7
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
