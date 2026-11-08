@@ -1,0 +1,84 @@
+Executed 2026-11-08 UTC on Debian 13, .NET SDK 8.0.427, SQL Server 2022 Developer (isolated Docker).
+These are headless business/repository tests, not WPF UI tests.
+
+PASS create valid patient goal
+PASS update goal rejects invalid target
+PASS NaN and infinity rejected
+PASS repeated sustained flexion meets target
+PASS one peak cannot meet two repetitions
+PASS single instantaneous sample is insufficient
+PASS incomplete final cycle is not a repetition
+PASS hold time enforced
+PASS hold unsupported is insufficient
+PASS unknown sensor convention is insufficient
+PASS invalid quality is insufficient
+PASS movement mismatch is insufficient
+PASS sample gaps cannot prove hold
+PASS duplicate timestamps rejected
+PASS negative / nonfinite angles insufficient
+PASS extension deficit uses decreasing angles
+PASS included joint angle extension increases toward 180
+PASS wrong flexion/extension convention rejected
+PASS clinical evidence needs source and reason
+PASS clinical result does not auto-confirm
+PASS clinical results enforce repetition criteria
+PASS password salted hashes verify and reject wrong password
+PASS doctor can check eligible milestone
+PASS cannot check without achieved evidence
+PASS revoke requires reason
+PASS doctor can revoke with reason
+PASS duplicate current confirmation rejected
+PASS wrong patient cannot be confirmed
+PASS patient identity has no confirmation permission
+PASS stale assessment cannot be confirmed
+PASS report escapes clinical notes
+PASS SQL migration executes twice without losing legacy rows
+PASS SQL doctor authentication
+PASS SQL legacy sessions and patient-scoped load
+PASS SQL create ROM milestone
+PASS SQL update creates revision and invalidates old evaluation
+PASS SQL old raw data insufficient until explicitly verified
+PASS SQL verified repeated sensor evidence only measures achieved
+PASS SQL wrong-patient session cannot be assessed
+PASS SQL transaction rolls back entire invalid checkbox batch
+PASS SQL save checkbox and audit
+PASS SQL reopen connection / repository preserves checkbox
+PASS SQL stale duplicate confirmation rejected
+PASS SQL unique index prevents second current confirmation
+PASS SQL confirmed goal cannot be silently edited
+PASS SQL revoke without reason rejected
+PASS SQL revoke keeps history and persists after reopen
+PASS SQL clinical assessment without sensor session
+PASS SQL wrong-patient FK rejects assessment association
+PASS SQL concurrent editors detect stale revision
+PASS SQL audit and assessment history reload
+PASS SQL two concurrent checkbox saves produce exactly one current confirmation
+PASS SQL unambiguous SensorData window can be evaluated after explicit verification
+PASS SQL overlapping SensorData sessions are insufficient evidence
+PASS SQL insufficient evidence cannot be clinically confirmed through checkbox
+PASS SQL editing goal invalidates prior assessments and rejects stale evidence
+PASS SQL missing measurement timestamps stay null and insufficient
+PASS SQL malformed chart JSON never produces measured achievement
+PASS SQL patient session cannot confirm
+PASS SQL deactivated doctor cannot change confirmations
+PASS SQL login lockout after five wrong passwords
+61 passed, 0 failed
+
+Additional validation executed:
+- Restored all 33 packages from the unchanged packages.config.
+- Test harness net48 build: succeeded, 0 warnings, 0 errors. The net48 executable was not run on Linux.
+- Static XAML/project check: 8 WPF Page items plus App; XML, handlers, StaticResource and project paths checked.
+- Whole application C# reference compilation: succeeded against net48 references and actual package DLLs, with temporary generated XAML field declarations. This is NOT a BAML/WPF build.
+- git diff --check: succeeded.
+
+Full application build attempts:
+- SDK 8.0.427 / MSBuild 17.11: AngleMonitorWPF.slnx -> MSB4068 (slnx unsupported by that tool).
+- AngleMonitorWPF.csproj -> MSB3644 (no system .NET Framework 4.8 Developer Pack on Linux).
+- With net48 references supplied: Windows WPF markup pipeline unavailable; generated InitializeComponent, XAML fields and entry point absent.
+
+NOT EXECUTED / NOT VERIFIED:
+- Full Windows solution/BAML build and WPF UI execution.
+- Closing/reopening the actual WPF process (repository/connection reload was tested).
+- Bluetooth device, firmware conventions, calibration, game and timer regression on real hardware.
+- PDF rendering/merging/pagination via Windows WebView2 and PDFsharp.
+- Provision-Doctor.ps1 execution on Windows PowerShell.

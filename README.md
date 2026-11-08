@@ -3,9 +3,11 @@
 Ứng dụng Desktop giám sát và trực quan hóa dữ liệu phục hồi chức năng khớp khuỷu tay theo thời gian thực. 
 
 ## 🚀 Công nghệ sử dụng
-* **Nền tảng:** C# WPF (.NET 10)
+* **Nền tảng:** C# WPF (.NET Framework 4.8, theo `AngleMonitorWPF.csproj`)
 * **Trực quan hóa:** Tích hợp WebView2 xử lý biểu đồ thời gian thực.
-* **Cơ sở dữ liệu:** SQL Server / SQLite quản lý thông tin bệnh nhân và lịch sử tập luyện.
+* **Cơ sở dữ liệu:** SQL Server quản lý thông tin bệnh nhân và lịch sử tập luyện.
+
+Doctor Workspace: xem [hướng dẫn triển khai, migration, tài khoản bác sĩ và kiểm thử](docs/DOCTOR_WORKSPACE_IMPLEMENTATION.md).
 
 ## ⚙️ Hướng dẫn cài đặt
 1. Clone repository này về máy tính.
@@ -30,3 +32,7 @@ Hệ thống sử dụng cơ sở dữ liệu tên là **`RehabDB`** gồm 3 b�
 2. Tạo một Database trống mới tên là **`RehabDB`** bằng câu lệnh:
    ```sql
    CREATE DATABASE RehabDB;
+   ```
+3. Chọn database `RehabDB`, chạy `create_tables.sql` **chỉ với database mới**. Với database đang có dữ liệu, giữ nguyên các bảng hiện có.
+4. Chạy `migrations/001_doctor_workspace.sql` trên database đó; migration kiểm tra phiên bản và có thể chạy lại.
+5. Sửa connection string `RehabDB` trong `App.config`, cấp tài khoản bác sĩ bằng `tools/Provision-Doctor.ps1` rồi mở ứng dụng.

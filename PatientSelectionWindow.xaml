@@ -168,10 +168,13 @@
                            x:Name="tbPlaceholder"/>
             </Grid>
 
-            <Button Grid.Column="1" Content="+ Hồ sơ mới"
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <Button Content="Không gian bác sĩ" Click="BtnDoctorWorkspace_Click" Padding="12,6" Margin="12,0,0,0"/>
+            <Button Content="+ Hồ sơ mới"
                     Style="{StaticResource PrimaryButton}"
                     Margin="12,0,0,0"
                     Click="BtnNewPatient_Click"/>
+            </StackPanel>
         </Grid>
 
         <TextBlock x:Name="tbPatientCount" Grid.Row="1"
@@ -228,7 +231,14 @@
 
                         <DataGridTextColumn Header="Buổi tập" Binding="{Binding SessionCount, StringFormat='{}{0} buổi tập'}" Width="120"/>
 
-                        <DataGridTemplateColumn Header="Thao tác" Width="80">
+                        <DataGridTemplateColumn Header="Hồ sơ ROM" Width="125">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Bác sĩ / ROM" Click="BtnDoctorWorkspace_Click" Padding="6" Background="#E8F5F0" Foreground="#176B52"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Tập luyện" Width="80">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Foreground="#A0AEC0"

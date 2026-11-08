@@ -1,0 +1,15 @@
+<Window x:Class="AngleMonitorWPF.DoctorLoginWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Xác thực bác sĩ — RehabTrack" Width="440" SizeToContent="Height"
+ ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="#F4F7F9" FontFamily="Segoe UI">
+ <StackPanel Margin="28">
+  <TextBlock Text="Đăng nhập bác sĩ" FontSize="24" FontWeight="SemiBold" Foreground="#166B58"/>
+  <TextBlock Text="Dùng tài khoản bác sĩ do quản trị viên cấp." Margin="0,8,0,20" TextWrapping="Wrap"/>
+  <TextBlock Text="Tên đăng nhập"/><TextBox x:Name="Username" Height="34" MaxLength="100" Margin="0,5,0,12"/>
+  <TextBlock Text="Mật khẩu"/><PasswordBox x:Name="Password" Height="34" MaxLength="256" Margin="0,5,0,12"/>
+  <TextBlock x:Name="Error" Foreground="#B42318" TextWrapping="Wrap" Margin="0,0,0,12"/>
+  <Button x:Name="LoginButton" Content="Xác thực" IsDefault="True" Click="Login_Click" Height="38" Background="#1D9E75" Foreground="White"/>
+  <Button Content="Hủy" IsCancel="True" Height="32" Margin="0,8,0,0"/>
+ </StackPanel>
+</Window>

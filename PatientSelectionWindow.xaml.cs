@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Data.SqlClient;
+using System.Threading.Tasks;
 
 namespace AngleMonitorWPF
 {
@@ -39,55 +40,58 @@ namespace AngleMonitorWPF
         {
             InitializeComponent();
             tbDate.Text = DateTime.Now.ToString("dd MMM yyyy");
-            LoadPatientsFromDatabase();
+            Loaded += async (s, e) => await LoadPatientsFromDatabaseAsync();
         }
 
         // TẢI DỮ LIỆU TỪ SQL SERVER
-        private void LoadPatientsFromDatabase()
+        private async Task LoadPatientsFromDatabaseAsync()
         {
-            _allPatients.Clear();
-
             try
             {
-                using (SqlConnection conn = new SqlConnection(@"Server=.;Database=RehabDB;Integrated Security=True;"))
+                _allPatients = await Task.Run(() =>
                 {
-                    conn.Open();
-                    string sql = @"
-                        SELECT 
-                        u.Id, 
-                        u.PatientCode, 
-                        u.CCCD, -- THÊM CỘT NÀY VÀO SELECT
-                        u.FullName, 
-                        u.Age, 
-                        u.Injury,
-                        (SELECT COUNT(*) FROM dbo.TrainingSessions ts WHERE ts.UserId = u.Id) AS SessionCount
-                        FROM dbo.Users u 
-                        ORDER BY u.CreatedAt DESC";
-                    using (SqlCommand cmd = new SqlCommand(sql, conn))
-                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    var patients = new List<Patient>();
+                    using (SqlConnection conn = DatabaseHelper.GetConnection())
                     {
-                        while (reader.Read())
+                        conn.Open();
+                        string sql = @"
+                            SELECT
+                            u.Id,
+                            u.PatientCode,
+                            u.CCCD, -- THÊM CỘT NÀY VÀO SELECT
+                            u.FullName,
+                            u.Age,
+                            u.Injury,
+                            (SELECT COUNT(*) FROM dbo.TrainingSessions ts WHERE ts.UserId = u.Id) AS SessionCount
+                            FROM dbo.Users u
+                            ORDER BY u.CreatedAt DESC";
+                        using (SqlCommand cmd = new SqlCommand(sql, conn))
+                        using (SqlDataReader reader = cmd.ExecuteReader())
                         {
-                            string injury = reader["Injury"] != DBNull.Value ? reader["Injury"].ToString() : "";
-                            string khopDieuTri = "Khác";
-                            if (injury.Contains("Knee")) khopDieuTri = "Knee";
-                            else if (injury.Contains("Shoulder")) khopDieuTri = "Shoulder";
-                            else if (injury.Contains("Hip")) khopDieuTri = "Hip";
-
-                            _allPatients.Add(new Patient
+                            while (reader.Read())
                             {
-                                Id = Convert.ToInt32(reader["Id"]),
-                                MSBN = reader["PatientCode"].ToString(),
-                                CCCD = reader["CCCD"] != DBNull.Value ? reader["CCCD"].ToString() : "", // GÁN GIÁ TRỊ CCCD
-                                HoVaTen = reader["FullName"].ToString(),
-                                Tuoi = reader["Age"] != DBNull.Value ? Convert.ToInt32(reader["Age"]) : 0,
-                                LoaiChanThuong = injury,
-                                KhopDieuTri = khopDieuTri,
-                                SoBuoiTap = reader["SessionCount"] != DBNull.Value ? Convert.ToInt32(reader["SessionCount"]) : 0
-                            });
+                                string injury = reader["Injury"] != DBNull.Value ? reader["Injury"].ToString() : "";
+                                string khopDieuTri = "Khác";
+                                if (injury.Contains("Knee")) khopDieuTri = "Knee";
+                                else if (injury.Contains("Shoulder")) khopDieuTri = "Shoulder";
+                                else if (injury.Contains("Hip")) khopDieuTri = "Hip";
+
+                                patients.Add(new Patient
+                                {
+                                    Id = Convert.ToInt32(reader["Id"]),
+                                    MSBN = reader["PatientCode"].ToString(),
+                                    CCCD = reader["CCCD"] != DBNull.Value ? reader["CCCD"].ToString() : "", // GÁN GIÁ TRỊ CCCD
+                                    HoVaTen = reader["FullName"].ToString(),
+                                    Tuoi = reader["Age"] != DBNull.Value ? Convert.ToInt32(reader["Age"]) : 0,
+                                    LoaiChanThuong = injury,
+                                    KhopDieuTri = khopDieuTri,
+                                    SoBuoiTap = reader["SessionCount"] != DBNull.Value ? Convert.ToInt32(reader["SessionCount"]) : 0
+                                });
+                            }
                         }
                     }
-                }
+                    return patients;
+                });
             }
             catch (Exception ex)
             {
@@ -155,6 +159,14 @@ namespace AngleMonitorWPF
                 mainWindow.Show();
                 this.Close();
             }
+        }
+        private async void BtnDoctorWorkspace_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            dynamic context = button?.DataContext;
+            int selectedId = context == null ? -1 : (int)context.Id;
+            await DoctorWorkspaceWindow.OpenAsync(this, selectedId);
+            await LoadPatientsFromDatabaseAsync();
         }
         // XÂY DỰNG MỘT CARD
         private Border BuildCard(Patient p, string avatarColor)
@@ -286,19 +298,20 @@ namespace AngleMonitorWPF
         {
             if (sender is Border border && border.Tag is Patient p)
             {
+                GlobalData.CurrentUserId = p.Id;
                 var mainWindow = new MainWindow();
                 mainWindow.Show();
                 this.Close();
             }
         }
 
-        private void BtnNewPatient_Click(object sender, RoutedEventArgs e)
+        private async void BtnNewPatient_Click(object sender, RoutedEventArgs e)
         {
             AddPatientWindow addPatientWin = new AddPatientWindow();
             bool? result = addPatientWin.ShowDialog();
             if (result == true)
             {
-                LoadPatientsFromDatabase();
+                await LoadPatientsFromDatabaseAsync();
             }
         }
 

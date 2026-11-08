@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Windows;
 using System.Threading.Tasks;
+using System.Configuration;
 
 namespace AngleMonitorWPF
 {
@@ -14,7 +15,8 @@ namespace AngleMonitorWPF
     // DATABASE HELPER (Xử lý kết nối SQL)
     public static class DatabaseHelper
     {
-        private static readonly string connectionString = @"Server=.;Database=RehabDB;Integrated Security=True;";
+        private static readonly string connectionString = ConfigurationManager.ConnectionStrings["RehabDB"]?.ConnectionString
+            ?? @"Server=.;Database=RehabDB;Integrated Security=True;";
 
         public static SqlConnection GetConnection()
         {

@@ -166,24 +166,17 @@
             <Border Grid.Row="0" Background="White" Padding="28,13"
                     BorderBrush="#EAEAEA" BorderThickness="0,0,0,1">
                 <Grid>
-                    <TextBlock Text="Expanded Analytics Session Dashboard"
-                               FontSize="16" FontWeight="Bold"
-                               Foreground="#1A1A2E" VerticalAlignment="Center"/>
-
-                </Grid>
-            </Border>
-            <Border Grid.Row="0" Background="White" Padding="28,13"
-                    BorderBrush="#EAEAEA" BorderThickness="0,0,0,1">
-                <Grid>
-                    <TextBlock Text="Expanded Analytics Session Dashboard"
-                               FontSize="16" FontWeight="Bold"
-                               Foreground="#1A1A2E" VerticalAlignment="Center"/>
+                    <StackPanel>
+                        <TextBlock Text="Lịch sử tập và phân tích ROM" FontSize="16" FontWeight="Bold" Foreground="#1A1A2E"/>
+                        <TextBlock x:Name="RomComparison" FontSize="11" MaxWidth="440" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
 
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center">
 
-                        <TextBlock Text="Compare Previous" FontSize="12"
+                        <Button Content="Bác sĩ / Mốc ROM" Click="OpenWorkspace_Click" Margin="0,0,10,0"/>
+                        <TextBlock Text="So sánh" FontSize="12"
                                    Foreground="#9BA3AF" VerticalAlignment="Center"
                                    Margin="0,0,10,0"/>
                         <ToggleButton Width="40" Height="22">
