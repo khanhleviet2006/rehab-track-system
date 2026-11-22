@@ -236,39 +236,79 @@ namespace AngleMonitorWPF
             }
         }
 
+        // Tự dò cổng Bluetooth Classic SPP của ESP32 thường (không phải BLE).
+        // Ưu tiên nhận dạng firmware bằng #ESP32_ROM_SPP; vẫn hỗ trợ
+        // firmware cũ chỉ truyền một số góc trên mỗi dòng.
         private async Task<string> AutoFindBluetoothPortAsync()
         {
             return await Task.Run(() =>
             {
-                string[] danhSachCong = SerialPort.GetPortNames();
-                foreach (string port in danhSachCong)
+                foreach (string port in SerialPort.GetPortNames().OrderBy(p => p))
                 {
-                    
                     try
                     {
-                        using (SerialPort testPort = new SerialPort(port, 115200))
+                        using (var testPort = new SerialPort(port, 115200))
                         {
-                            testPort.ReadTimeout = 1000; 
+                            testPort.NewLine = "\n";
+                            testPort.ReadTimeout = 250;
+                            testPort.DtrEnable = false;
+                            testPort.RtsEnable = false;
                             testPort.Open();
 
-                            for (int i = 0; i < 5; i++)
+                            int numericSamples = 0;
+                            var watch = System.Diagnostics.Stopwatch.StartNew();
+                            while (watch.ElapsedMilliseconds < 3500)
                             {
-                                string data = testPort.ReadLine().Trim();
-                                if (string.IsNullOrEmpty(data)) continue;
-
-                                
-                                if (double.TryParse(data, NumberStyles.Any, CultureInfo.InvariantCulture, out double testAngle))
+                                string line;
+                                try
                                 {
-                                    if (testAngle >= -180 && testAngle <= 180)
-                                    {
+                                    line = testPort.ReadLine().Trim();
+                                }
+                                catch (TimeoutException)
+                                {
+                                    // Không loại cổng ngay sau một lần timeout.
+                                    continue;
+                                }
+
+                                if (line.StartsWith("#ESP32_ROM_SPP", StringComparison.Ordinal))
+                                    return port;
+
+                                double angle;
+                                if (double.TryParse(line, NumberStyles.Float,
+                                        CultureInfo.InvariantCulture, out angle)
+                                    && !double.IsNaN(angle)
+                                    && !double.IsInfinity(angle)
+                                    && angle >= -180 && angle <= 180)
+                                {
+                                    numericSamples++;
+                                    if (numericSamples >= 2)
                                         return port;
-                                    }
+                                }
+                                else
+                                {
+                                    numericSamples = 0;
                                 }
                             }
                         }
                     }
-                    catch { continue; }
+                    catch (UnauthorizedAccessException)
+                    {
+                        // Cổng bị chương trình khác chiếm.
+                    }
+                    catch (System.IO.IOException)
+                    {
+                        // Cổng Bluetooth không sẵn sàng.
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Không mở được cổng.
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Tên cổng không hợp lệ.
+                    }
                 }
+
                 return null;
             });
         }
@@ -309,7 +349,15 @@ namespace AngleMonitorWPF
                     _currentSession = new RehabSession();
                     _currentSession.SessionId = DatabaseHelper.CreateNewSession();
 
-                    _serialPort = new SerialPort(congTuDong, 115200);
+                    // Đợi Windows giải phóng cổng sau khi kiểm tra SPP.
+                    await Task.Delay(350);
+                    _serialPort = new SerialPort(congTuDong, 115200)
+                    {
+                        NewLine = "\n",
+                        ReadTimeout = 350,
+                        DtrEnable = false,
+                        RtsEnable = false
+                    };
                     _serialPort.DataReceived += SerialPort_DataReceived;
                     _serialPort.Open();
 
