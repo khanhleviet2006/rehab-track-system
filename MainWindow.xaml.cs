@@ -236,38 +236,94 @@ namespace AngleMonitorWPF
             }
         }
 
+        // Tự động dò cổng SPP của firmware ESP32_MPU6500 hiện tại.
+        // Firmware gửi mỗi dòng một số góc, có dấu chấm thập phân.
         private async Task<string> AutoFindBluetoothPortAsync()
         {
             return await Task.Run(() =>
             {
-                string[] danhSachCong = SerialPort.GetPortNames();
-                foreach (string port in danhSachCong)
+                var allPorts = SerialPort.GetPortNames();
+                var bluetoothPorts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                // Ưu tiên cổng Bluetooth SPP (Outgoing), không nhận nhầm USB serial.
+                // Nếu WMI không khả dụng, vẫn quét mọi COM như trước.
+                try
                 {
-                    
-                    try
+                    using (var finder = new System.Management.ManagementObjectSearcher(
+                        "SELECT Name, PNPDeviceID FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'"))
                     {
-                        using (SerialPort testPort = new SerialPort(port, 115200))
+                        foreach (System.Management.ManagementObject device in finder.Get())
                         {
-                            testPort.ReadTimeout = 1000; 
-                            testPort.Open();
-
-                            for (int i = 0; i < 5; i++)
+                            using (device)
                             {
-                                string data = testPort.ReadLine().Trim();
-                                if (string.IsNullOrEmpty(data)) continue;
-
-                                
-                                if (double.TryParse(data, NumberStyles.Any, CultureInfo.InvariantCulture, out double testAngle))
+                                string name = Convert.ToString(device["Name"]) ?? "";
+                                string pnpId = Convert.ToString(device["PNPDeviceID"]) ?? "";
+                                Match m = Regex.Match(name, @"\((COM\d+)\)", RegexOptions.IgnoreCase);
+                                if (m.Success &&
+                                    (name.IndexOf("Bluetooth", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     pnpId.StartsWith("BTHENUM", StringComparison.OrdinalIgnoreCase)))
                                 {
-                                    if (testAngle >= -180 && testAngle <= 180)
-                                    {
-                                        return port;
-                                    }
+                                    bluetoothPorts.Add(m.Groups[1].Value);
                                 }
                             }
                         }
                     }
-                    catch { continue; }
+                }
+                catch (System.Management.ManagementException) { }
+                catch (UnauthorizedAccessException) { }
+                catch (System.Runtime.InteropServices.COMException) { }
+
+                var orderedPorts = allPorts
+                    .OrderBy(p => bluetoothPorts.Contains(p) ? 0 : 1)
+                    .ThenBy(p => p, StringComparer.OrdinalIgnoreCase);
+
+                foreach (string port in orderedPorts)
+                {
+                    try
+                    {
+                        using (var testPort = new SerialPort(port, 115200))
+                        {
+                            testPort.NewLine = "\n";
+                            testPort.ReadTimeout = 250;
+                            testPort.DtrEnable = false;
+                            testPort.RtsEnable = false;
+                            testPort.Open();
+
+                            int numericSamples = 0;
+                            var watch = System.Diagnostics.Stopwatch.StartNew();
+                            while (watch.ElapsedMilliseconds < 3500)
+                            {
+                                string line;
+                                try
+                                {
+                                    line = testPort.ReadLine().Trim();
+                                }
+                                catch (TimeoutException)
+                                {
+                                    // Chờ tiếp: Bluetooth SPP có thể mất thời gian để stream.
+                                    continue;
+                                }
+
+                                double angle;
+                                if (double.TryParse(line, NumberStyles.Float,
+                                        CultureInfo.InvariantCulture, out angle) &&
+                                    !double.IsNaN(angle) &&
+                                    !double.IsInfinity(angle) &&
+                                    angle >= -180 && angle <= 180)
+                                {
+                                    if (++numericSamples >= 2) return port;
+                                }
+                                else
+                                {
+                                    numericSamples = 0;
+                                }
+                            }
+                        }
+                    }
+                    catch (UnauthorizedAccessException) { } // Cổng đang bị chiếm
+                    catch (System.IO.IOException) { }        // Cổng không sẵn sàng
+                    catch (InvalidOperationException) { }
+                    catch (ArgumentException) { }
                 }
                 return null;
             });
@@ -295,7 +351,13 @@ namespace AngleMonitorWPF
 
                     if (string.IsNullOrEmpty(congTuDong))
                     {
-                        MessageBox.Show("Không tìm thấy mạch đo! Vui lòng kiểm tra lại:\n1. Mạch đã được bật nguồn chưa?\n2. Đã ghép đôi Bluetooth với máy tính chưa?", "Lỗi kết nối", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show("Không tìm thấy luồng góc từ ESP32_MPU6500.\n" +
+                            "Hãy ghép đôi Bluetooth Classic với Windows và xác nhận có cổng COM Outgoing.\n" +
+                            "Các cổng phát hiện: " +
+                            (SerialPort.GetPortNames().Length == 0 ? "(không có COM)" :
+                             string.Join(", ", SerialPort.GetPortNames())) +
+                            "\nĐóng ứng dụng terminal đang dùng cổng COM rồi thử lại.",
+                            "Lỗi kết nối", MessageBoxButton.OK, MessageBoxImage.Warning);
                         txtStatus.Text = "● Chưa kết nối";
                         return;
                     }
@@ -309,7 +371,15 @@ namespace AngleMonitorWPF
                     _currentSession = new RehabSession();
                     _currentSession.SessionId = DatabaseHelper.CreateNewSession();
 
-                    _serialPort = new SerialPort(congTuDong, 115200);
+                    // Đợi Windows giải phóng cổng sau khi kiểm tra SPP.
+                    await Task.Delay(350);
+                    _serialPort = new SerialPort(congTuDong, 115200)
+                    {
+                        NewLine = "\n",
+                        ReadTimeout = 350,
+                        DtrEnable = false,
+                        RtsEnable = false
+                    };
                     _serialPort.DataReceived += SerialPort_DataReceived;
                     _serialPort.Open();
 
