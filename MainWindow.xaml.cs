@@ -236,14 +236,48 @@ namespace AngleMonitorWPF
             }
         }
 
-        // Tự dò cổng Bluetooth Classic SPP của ESP32 thường (không phải BLE).
-        // Ưu tiên nhận dạng firmware bằng #ESP32_ROM_SPP; vẫn hỗ trợ
-        // firmware cũ chỉ truyền một số góc trên mỗi dòng.
+        // Tự động dò cổng SPP của firmware ESP32_MPU6500 hiện tại.
+        // Firmware gửi mỗi dòng một số góc, có dấu chấm thập phân.
         private async Task<string> AutoFindBluetoothPortAsync()
         {
             return await Task.Run(() =>
             {
-                foreach (string port in SerialPort.GetPortNames().OrderBy(p => p))
+                var allPorts = SerialPort.GetPortNames();
+                var bluetoothPorts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                // Ưu tiên cổng Bluetooth SPP (Outgoing), không nhận nhầm USB serial.
+                // Nếu WMI không khả dụng, vẫn quét mọi COM như trước.
+                try
+                {
+                    using (var finder = new System.Management.ManagementObjectSearcher(
+                        "SELECT Name, PNPDeviceID FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'"))
+                    {
+                        foreach (System.Management.ManagementObject device in finder.Get())
+                        {
+                            using (device)
+                            {
+                                string name = Convert.ToString(device["Name"]) ?? "";
+                                string pnpId = Convert.ToString(device["PNPDeviceID"]) ?? "";
+                                Match m = Regex.Match(name, @"\((COM\d+)\)", RegexOptions.IgnoreCase);
+                                if (m.Success &&
+                                    (name.IndexOf("Bluetooth", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     pnpId.StartsWith("BTHENUM", StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    bluetoothPorts.Add(m.Groups[1].Value);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (System.Management.ManagementException) { }
+                catch (UnauthorizedAccessException) { }
+                catch (System.Runtime.InteropServices.COMException) { }
+
+                var orderedPorts = allPorts
+                    .OrderBy(p => bluetoothPorts.Contains(p) ? 0 : 1)
+                    .ThenBy(p => p, StringComparer.OrdinalIgnoreCase);
+
+                foreach (string port in orderedPorts)
                 {
                     try
                     {
@@ -266,23 +300,18 @@ namespace AngleMonitorWPF
                                 }
                                 catch (TimeoutException)
                                 {
-                                    // Không loại cổng ngay sau một lần timeout.
+                                    // Chờ tiếp: Bluetooth SPP có thể mất thời gian để stream.
                                     continue;
                                 }
 
-                                if (line.StartsWith("#ESP32_ROM_SPP", StringComparison.Ordinal))
-                                    return port;
-
                                 double angle;
                                 if (double.TryParse(line, NumberStyles.Float,
-                                        CultureInfo.InvariantCulture, out angle)
-                                    && !double.IsNaN(angle)
-                                    && !double.IsInfinity(angle)
-                                    && angle >= -180 && angle <= 180)
+                                        CultureInfo.InvariantCulture, out angle) &&
+                                    !double.IsNaN(angle) &&
+                                    !double.IsInfinity(angle) &&
+                                    angle >= -180 && angle <= 180)
                                 {
-                                    numericSamples++;
-                                    if (numericSamples >= 2)
-                                        return port;
+                                    if (++numericSamples >= 2) return port;
                                 }
                                 else
                                 {
@@ -291,24 +320,11 @@ namespace AngleMonitorWPF
                             }
                         }
                     }
-                    catch (UnauthorizedAccessException)
-                    {
-                        // Cổng bị chương trình khác chiếm.
-                    }
-                    catch (System.IO.IOException)
-                    {
-                        // Cổng Bluetooth không sẵn sàng.
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Không mở được cổng.
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Tên cổng không hợp lệ.
-                    }
+                    catch (UnauthorizedAccessException) { } // Cổng đang bị chiếm
+                    catch (System.IO.IOException) { }        // Cổng không sẵn sàng
+                    catch (InvalidOperationException) { }
+                    catch (ArgumentException) { }
                 }
-
                 return null;
             });
         }
@@ -335,7 +351,13 @@ namespace AngleMonitorWPF
 
                     if (string.IsNullOrEmpty(congTuDong))
                     {
-                        MessageBox.Show("Không tìm thấy mạch đo! Vui lòng kiểm tra lại:\n1. Mạch đã được bật nguồn chưa?\n2. Đã ghép đôi Bluetooth với máy tính chưa?", "Lỗi kết nối", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show("Không tìm thấy luồng góc từ ESP32_MPU6500.\n" +
+                            "Hãy ghép đôi Bluetooth Classic với Windows và xác nhận có cổng COM Outgoing.\n" +
+                            "Các cổng phát hiện: " +
+                            (SerialPort.GetPortNames().Length == 0 ? "(không có COM)" :
+                             string.Join(", ", SerialPort.GetPortNames())) +
+                            "\nĐóng ứng dụng terminal đang dùng cổng COM rồi thử lại.",
+                            "Lỗi kết nối", MessageBoxButton.OK, MessageBoxImage.Warning);
                         txtStatus.Text = "● Chưa kết nối";
                         return;
                     }
